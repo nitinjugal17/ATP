@@ -21,6 +21,8 @@
 7. [🔄 End-to-End Application & Inference Sequence UML](#-end-to-end-application--inference-sequence-uml)
 8. [🧹 Multi-Stage Sanitization, RAG Context Injection & Re-Sanitization Pipeline](#-multi-stage-sanitization-rag-context-injection--re-sanitization-pipeline)
 9. [🧪 Integrated Test Disciplines](#-integrated-test-disciplines)
+   * [🌐 Enterprise Multi-Vector API Discovery Engine (`api_crawler.py`)](#-enterprise-multi-vector-api-discovery-engine-api_crawlerpy)
+   * [🗺️ Enterprise Coverage Heatmap & Gap Fulfiller (`coverage_engine.py`)](#-enterprise-coverage-heatmap--gap-fulfiller-coverage_enginepy)
 10. [📋 Sample Generated Test Suites (Multi-Discipline Code Gallery)](#-sample-generated-test-suites-multi-discipline-code-gallery)
 11. [🛡️ Automotive ASPICE & ISO 26262 Bidirectional Traceability (RTM)](#-automotive-aspice--iso-26262-bidirectional-traceability-rtm)
 12. [⚡ Live Load Testing & Hardware Calibrator](#-live-load-testing--hardware-calibrator)
@@ -528,10 +530,93 @@ One of the platform's core architectural innovations is its **deterministic sani
 | Discipline | Underlying Technology | Capabilities |
 | :--- | :--- | :--- |
 | **E2E UI Automation** | WebdriverIO & Selenium | Headless Chromium, resilient wait strategies, dynamic locator auto-healing, visual screenshot capture. |
-| **API Testing** | Pytest & Requests | Deep Boundary Value Analysis (BVA), HTTP status validation, JSON schema assertions, auth header injection. |
+| **API Testing & Recon** | Enterprise Multi-Vector Crawler + Pytest | 5-vector active/passive discovery (OpenAPI/Swagger/GraphQL/CDP/JS Bundles), Deep Boundary Value Analysis (BVA), OWASP security injection assertions, and sub-millisecond latency SLAs. |
 | **Performance Testing**| Grafana k6 | Virtual user (VU) ramps, threshold assertions (`p95 < 500ms`), RPS stress testing, endpoint saturation profiling. |
 | **Acceptance / BDD** | Robot Framework + Pabot | Human-readable Gherkin/BDD keyword syntax, parallel test execution, Allure listener integration. |
 | **Security / Compliance**| NIST CVE Scanner | Real-time vulnerability lookup, SSL/TLS audit, security header verification (CORS, CSP, X-Frame-Options). |
+
+---
+
+### 🌐 Enterprise Multi-Vector API Discovery Engine (`api_crawler.py`)
+
+Unlike conventional QA tools that require manual Postman collections or OpenAPI files, ATP features an **autonomous multi-vector reconnaissance engine** ([`api_crawler.py`](file:///c:/Users/Junko/Downloads/ragllmorch/aspice_qa_framework/engines/api_crawler.py)) that actively hunts, maps, and analyzes exposed backend APIs across 5 distinct discovery vectors:
+
+```
++-------------------------------------------------------------------------------+
+|               ENTERPRISE MULTI-VECTOR BACKEND API RECONNAISSANCE              |
++-------------------------------------------------------------------------------+
+| 1. Active Schema Probing       --> Probes 23 OpenAPI / Swagger / GraphQL specs|
+| 2. Client Script Bundle Mining --> Fetches JS bundles, regex-mines uncalled APIs|
+| 3. CDP Network Interception    --> Captures live XHR/Fetch network traffic   |
+| 4. DOM Form Target Extraction  --> Parses HTML form actions & parameter models |
+| 5. BVA & Security Matrixing    --> Generates Boundary Value & OWASP test suites|
++-------------------------------------------------------------------------------+
+```
+
+1. **Vector 1: Active Schema & Introspection Probing**:
+   * Concurrently probes 23 candidate documentation and schema paths (`/openapi.json`, `/swagger.json`, `/v3/api-docs`, `/api-docs`, `/graphql` introspection queries) using a bounded `ThreadPoolExecutor`.
+   * Automatically parses OpenAPI 3.x and Swagger 2.0 specs to catalog complete route paths, HTTP verbs, parameter definitions, and expected response codes.
+2. **Vector 2: Static Client-Side Script & Bundle Mining**:
+   * Scrapes DOM snapshots for `<script>` tags, fetches external JavaScript bundles (up to 200KB per bundle), and executes high-speed regex pattern matching to unearth un-documented REST endpoints (`/api/*`, `/v[0-9]+/*`, `fetch()`, `axios()`).
+3. **Vector 3: CDP Live Network Traffic Interception**:
+   * Ingests Chrome DevTools Protocol (CDP) `performance` logs during dynamic crawling to intercept active runtime XHR/Fetch requests, capturing exact request methods, URLs, headers, and representative JSON request bodies.
+4. **Vector 4: DOM Form Action & Parameter Extraction**:
+   * Traverses DOM trees to detect `<form action="..." method="...">` elements, extracting submission routes and parameter names from child input, textarea, and select controls.
+5. **Vector 5: Automated Boundary Value Analysis (BVA) & OWASP Security Suite Generation**:
+   * Automatically classifies every discovered route into logical domains (`HEALTH`, `AUTHENTICATION`, `SEARCH`, `CRUD`, `MUTATION`).
+   * Generates robust, informative checks:
+     * **Contract & Latency SLA**: Asserts valid HTTP responses (`200, 201, 202, 204, 301, 302, 400, 401, 403, 404, 405, 422`) within strict latency bounds (<4000ms / <8000ms).
+     * **Boundary Value Analysis (BVA)**: Submits edge-case payloads (`{}`, empty strings, whitespace, null values) to verify graceful error handling without unhandled HTTP 500 crashes.
+     * **OWASP API Security Probes**: Defensive SQL injection fragments (`' OR '1'='1' --`) and cross-site scripting vectors (`<script>alert(1)</script>`) asserting zero leakage of database syntax errors or runtime stack traces.
+
+
+
+---
+
+### 🗺️ Enterprise Coverage Heatmap & Gap Fulfiller (`coverage_engine.py`)
+
+To solve test fragmentation and visibility gaps across complex enterprise applications, ATP features an **Intelligent 5-Discipline Coverage Heatmap Engine** ([`coverage_engine.py`](file:///c:/Users/Junko/Downloads/ragllmorch/aspice_qa_framework/engines/coverage_engine.py)). This engine audits the entire test estate, maps routes and entities against 5 fundamental testing disciplines, visualizes coverage in a live matrix table, and enables 1-click sovereign test gap fulfillment.
+
+```
++-----------------------------------------------------------------------------------------------+
+|                 ASPICE SWE.4 & SWE.5 MULTI-DISCIPLINE COVERAGE HEATMAP MATRIX                 |
++-----------------------------------------------------------------------------------------------+
+|  Entity / Endpoint Route  |  UI E2E (POM)  |  API (BVA)  |  Load (k6)  | Acceptance | Security|
++---------------------------+----------------+-------------+-------------+------------+---------+
+| /api/chat/ask             |     [✓ 6]      |    [✓ 1]    |    [+ Fill] |  [+ Fill]  |  [✓ 1]  |
+| /api/coverage/matrix      |     [✓ 6]      |    [✓ 1]    |    [+ Fill] |  [+ Fill]  |  [✓ 1]  |
+| /api/evaluate             |     [✓ 6]      |    [✓ 1]    |    [+ Fill] |  [+ Fill]  |  [✓ 1]  |
+| /api/storage/clean        |     [✓ 6]      |    [✓ 1]    |    [+ Fill] |  [+ Fill]  |  [✓ 1]  |
++-----------------------------------------------------------------------------------------------+
+| Overall Estate Coverage: 59.6%  •  28 Discovered Entities  •  13 Active Tests  •  57 Gaps     |
++-----------------------------------------------------------------------------------------------+
+```
+
+#### 1. The 5 Integrated Testing Disciplines
+Every crawled route, page, and backend API is cross-referenced against 5 enterprise testing pillars:
+1. **UI E2E**: End-to-end user workflows, Page Object Model (POM) interactions, explicit waits, and visual assertion checks (`artifacts/scripts/auto_ui_test.py`).
+2. **API (BVA)**: Boundary Value Analysis, schema validation, HTTP status assertion, and latency SLA checks (`artifacts/scripts/auto_api_test.py`).
+3. **Load (k6)**: High-concurrency performance thresholds, virtual user (VU) ramps, and p95 latency stress checks (`artifacts/scripts/load_test.js`).
+4. **Acceptance (BDD)**: Human-readable Gherkin/BDD scenarios, ASPICE requirement tracing, and Robot Framework keywords (`aspice_qa_framework/execution_suite.robot`).
+5. **Security (OWASP)**: Defensive injection probes (SQLi, XSS, SSRF), parameter fuzzing, and credential leakage checks.
+
+#### 2. Deep AST-Based Test Estate Audit
+Rather than simple file presence checks, `CoverageMatrixEngine` performs deep static analysis:
+* **Python Abstract Syntax Trees (`ast.parse`)**: Extracts test function definitions, docstrings, line numbers, and decorators from Pytest suites.
+* **Robot Framework Lexer**: Parses test case blocks, `[Tags]`, `[Documentation]`, and step keywords.
+* **k6 JavaScript Scanner**: Scans virtual user endpoint definitions, HTTP methods, and threshold configurations.
+* **Tag Taxonomy**: Automatically extracts, catalogs, and indexes all metadata tags (`#P0-Critical`, `#P1-High`, `#UI-POM`, `#OWASP-Top10`, `#Contract`, `#SLA`, `#BVA`, `#ASPICE-SWE4`).
+
+#### 3. Interactive Web Heatmap & Test Inspector Drawer
+The Web Dashboard (`static/index.html`) includes a dedicated **🗺️ Coverage Matrix** modal:
+* **6 Live Metric Cards**: Total Coverage %, UI E2E %, API BVA %, Load k6 %, Acceptance %, and OWASP Security %.
+* **Instant Filtering**: Filter entities by search keyword, view status (`All`, `Gaps Only`, `Fully Covered`), or click tag pills (`#P0-Critical`, `#Contract`) to isolate specific subsets.
+* **Test Case Inspector Drawer**: Clicking any covered cell (`✓ N`) expands an inspector drawer displaying test names, human-readable docstrings, exact file paths with line numbers, and ASPICE tags.
+
+#### 4. Sovereign 1-Click Gap Fulfiller & Custom Test Injection
+Users can seal identified gaps with two flexible workflows:
+* **⚡ 1-Click Auto-Fulfill (`POST /api/coverage/fulfill`)**: Sovereign synthesis instantly generates the missing test discipline for the selected entity with high LLM speed, appends it to the proper test suite (`auto_api_test.py`, `load_test.js`, or `execution_suite.robot`), and updates the coverage matrix in real time.
+* **✍️ Add Custom Test Case (`POST /api/coverage/custom-test`)**: SDETs can specify custom test names, enterprise docstrings, and custom tags (e.g. `REQ-PAYLOAD-09`, `P0-Critical`, `BVA`), which are automatically formatted and injected into the appropriate suite.
 
 ---
 
@@ -810,64 +895,75 @@ Page Layout Must Maintain Viewport Stability Across Device Sizes
 
 ### 5. Pabot Parallel Execution Transcript & Human-Readable Verification Log
 
-When Pabot executes tests in parallel across CPU cores (`pabot --processes 4 --outputdir artifacts/reports/pabot aspice_qa_framework/auto_suite.robot`), the console output and Allure logs read like an **executive verification transcript** that makes 100% intuitive sense to QA Leads, Software Architects, and Compliance Auditors:
+When Pabot executes tests in parallel across CPU cores (`pabot --testlevelsplit --processes 4 --pythonpath artifacts/scripts --outputdir artifacts/reports/pabot_results artifacts/scripts/auto_suite.robot`), the console output and generated HTML logs read like an **executive verification transcript** that makes 100% intuitive sense to QA Leads, Software Architects, Product Managers, and Compliance Auditors.
 
-```
+#### 🖥️ Real Live Pabot Execution Transcript (Empirically Verified in Container)
+```text
 ==============================================================================
-[PABOT] Master Execution Engine Initialized
-[PABOT] Workers: 4 Parallel Threads | Test Runner: Headless Chromium
-[PABOT] Suite File: aspice_qa_framework/execution_suite.robot
+[PABOT] Master Parallel Test-Level Cluster Initialized
+[PABOT] Process Pool : 4 Concurrent Worker PIDs | Runner: Headless Chromium
+[PABOT] Test Suite   : artifacts/scripts/auto_suite.robot
+[PABOT] Output Dir   : artifacts/reports/pabot_results/
 ==============================================================================
-[PABOT] Dispatching 4 suites across parallel threads...
+2026-09-05 14:11:09 [PID:35463] [0] [ID:0] EXECUTING Auto Suite.TC-UI-01: Verify Application Landing Page Reachability, Brand Logo & Document Title Contract
+2026-09-05 14:11:09 [PID:35462] [1] [ID:1] EXECUTING Auto Suite.TC-UI-02: Verify Primary Action Elements, Button Clickability & Event Handling
+2026-09-05 14:11:09 [PID:35461] [2] [ID:2] EXECUTING Auto Suite.TC-UI-03: Verify Form Field Nominal Data Entry & State Persistence
+2026-09-05 14:11:09 [PID:35467] [3] [ID:3] EXECUTING Auto Suite.TC-UI-04: Verify Input Field Boundary Value Analysis (BVA) & Graceful Error Handling
 
-[PASSED] [Thread 1] Scenario: TC-P01-01 Reachability & Brand Identity Verification on E-Commerce Landing Page
-   * Given: Public Client Navigates To Target Web Portal ..................... [PASS] (0.82s)
-   * When:  Page State Is Fully Hydrated And DOM ReadyState Equals Complete ... [PASS] (0.15s)
-   * Then:  Application Header Brand Identity Logo Must Be Visible ............ [PASS] (0.04s)
-   * And:   Primary Navigation Menu Must Contain Valid Domain Routes .......... [PASS] (0.08s)
-   * And:   Page Render Latency Must Satisfy SLA Threshold Of Under 4.0s ...... [PASS] (0.01s)
-   * And:   Capture Execution Verification Screenshot ......................... [PASS] (0.24s)
-   Verdict: PASSED | Duration: 1.34s | Trace: REQ-UI-001 | Tags: [CRITICAL, SMOKE]
+2026-09-05 14:11:15 [PID:35463] [0] [ID:0] PASSED Auto Suite.TC-UI-01: Verify Application Landing Page Reachability, Brand Logo & Document Title Contract in 6.0 seconds
+2026-09-05 14:11:15 [PID:35974] [0] [ID:4] EXECUTING Auto Suite.TC-UI-05: Verify Dropdown Option Selection & Selection Event Handling
 
-[PASSED] [Thread 2] Scenario: TC-P01-05 Form Input Data Entry & State Persistence Under Nominal User Journey
-   * Given: Public Client Navigates To Target Web Portal ..................... [PASS] (0.78s)
-   * When:  Customer Enters Nominal Shipping Details In Order Form ............ [PASS] (0.42s)
-   * Then:  Input Fields Must Retain Entered Values Accurately ................ [PASS] (0.03s)
-   * And:   Submit Action Must Advance To Order Review Step ................... [PASS] (0.35s)
-   * And:   Capture Execution Verification Screenshot ......................... [PASS] (0.21s)
-   Verdict: PASSED | Duration: 1.79s | Trace: REQ-FORM-005 | Tags: [E2E-JOURNEY, HIGH]
+2026-09-05 14:11:16 [PID:35461] [2] [ID:2] PASSED Auto Suite.TC-UI-03: Verify Form Field Nominal Data Entry & State Persistence in 6.8 seconds
+2026-09-05 14:11:16 [PID:35981] [1] [ID:5] EXECUTING Auto Suite.TC-SEC-01: Defensive Security: Cross-Site Scripting (XSS) & SQL Injection Payload Probing
 
-[PASSED] [Thread 3] Scenario: TC-P01-06 Form Input Boundary Value Analysis (BVA) & Injection Resilience
-   * Given: Public Client Navigates To Target Web Portal ..................... [PASS] (0.80s)
-   * When:  Malicious Payloads And Boundary Overflows Are Submitted .......... [PASS] (0.38s)
-   * Then:  Application Must Display Client-Side Validation Notice ............ [PASS] (0.05s)
-   * And:   Backend Must Not Expose Unhandled Server Error Or Stack Traces .... [PASS] (0.02s)
-   * And:   Page Layout Must Maintain Viewport Stability Across Device Sizes .. [PASS] (0.04s)
-   Verdict: PASSED | Duration: 1.29s | Trace: REQ-SEC-012 | Tags: [SECURITY-BVA, HIGH]
+2026-09-05 14:11:16 [PID:35467] [3] [ID:3] PASSED Auto Suite.TC-UI-04: Verify Input Field Boundary Value Analysis (BVA) & Graceful Error Handling in 6.8 seconds
+2026-09-05 14:11:16 [PID:35992] [2] [ID:6] EXECUTING Auto Suite.TC-PERF-01: Client Render SLA Performance & Document Localization Attributes
 
-[PASSED] [Thread 4] Scenario: TC-API-01 Primary Backend API Contract & Health SLA Verification
-   * Given: Backend Microservices Authorization Headers Are Configured ........ [PASS] (0.01s)
-   * When:  HTTP GET Probe Dispatched To /api/v1/health ....................... [PASS] (0.12s)
-   * Then:  Response Code Equals 200 OK And Payload Schema Satisfies Contract . [PASS] (0.02s)
-   Verdict: PASSED | Duration: 0.15s | Trace: REQ-API-001 | Tags: [API, CONTRACT]
+2026-09-05 14:11:18 [PID:35462] [1] [ID:1] PASSED Auto Suite.TC-UI-02: Verify Primary Action Elements, Button Clickability & Event Handling in 8.7 seconds
+2026-09-05 14:11:18 [PID:36347] [3] [ID:7] EXECUTING Auto Suite.TC-API-01: Backend Microservices Health Endpoint Contract & Response Latency
 
+2026-09-05 14:11:20 [PID:35992] [2] [ID:6] PASSED Auto Suite.TC-PERF-01: Client Render SLA Performance & Document Localization Attributes in 3.8 seconds
+2026-09-05 14:11:20 [PID:36477] [0] [ID:8] EXECUTING Auto Suite.TC-ORCH-01: Orchestrate External Python Page Object Model (POM) UI Suite
+
+2026-09-05 14:11:21 [PID:35981] [1] [ID:5] PASSED Auto Suite.TC-SEC-01: Defensive Security: Cross-Site Scripting (XSS) & SQL Injection Payload Probing in 4.4 seconds
+2026-09-05 14:11:21 [PID:36483] [1] [ID:9] EXECUTING Auto Suite.TC-ORCH-02: Orchestrate External Python REST API Boundary Value Analysis Suite
+
+2026-09-05 14:11:21 [PID:36347] [3] [ID:7] PASSED Auto Suite.TC-API-01: Backend Microservices Health Endpoint Contract & Response Latency in 2.5 seconds
+2026-09-05 14:11:25 [PID:36483] [1] [ID:9] PASSED Auto Suite.TC-ORCH-02: Orchestrate External Python REST API Boundary Value Analysis Suite in 4.5 seconds
+2026-09-05 14:11:27 [PID:35974] [0] [ID:4] PASSED Auto Suite.TC-UI-05: Verify Dropdown Option Selection & Selection Event Handling in 11.8 seconds
+2026-09-05 14:12:10 [PID:36477] [0] [ID:8] PASSED Auto Suite.TC-ORCH-01: Orchestrate External Python Page Object Model (POM) UI Suite in 50.1 seconds
 ==============================================================================
-PABOT PARALLEL EXECUTION RUN SUMMARY:
-Suites Executed: 4 | Passed: 4 | Failed: 0 | Flaky: 0 | Skipped: 0
-Total Test Steps Verified: 18 Distinct Assertions
-Serial Execution Time: 4.57s  ──►  Parallel Wall-Clock Time: 1.81s (⚡ 2.52x Speedup)
-Artifacts Generated:
-  * Allure Quality Report: artifacts/reports/allure-report/index.html
-  * Robot HTML Log:       artifacts/reports/pabot/log.html
-  * Bidirectional RTM:    artifacts/reports/Live_RTM_Matrix.csv
+PABOT TEST RUN SUMMARY:
+10 tests, 10 passed, 0 failed, 0 skipped.
+Total Cumulative Testing Time : 1 minute 45.40 seconds
+Elapsed Wall-Clock Time       : 1 minute 3.93 seconds (⚡ 1.65x Parallel Acceleration)
+Generated Reports:
+  * Master XML Output  : artifacts/reports/pabot_results/output.xml
+  * Human-Readable Log : artifacts/reports/pabot_results/log.html
+  * Executive Overview : artifacts/reports/pabot_results/report.html
 ==============================================================================
 ```
 
-#### Why Reading These Results Makes Full Sense:
-1. **Zero Cryptic Technical Jargon**: Instead of seeing `Click Element xpath=//div[3]/button[2] FAIL`, any stakeholder reading the report instantly understands:
-   `When: Customer Enters Nominal Shipping Details In Order Form -> PASS`
-2. **Immediate Root Cause Localization**: If a failure occurs, the log explicitly identifies which business requirement was breached (e.g. `AssertionError: Expected input field to retain 'jane.doe@enterprise.internal' but found empty string`).
-3. **Automatic Evidence Attachment**: Every test step embeds network timings and visual screenshots (`.png`) right inside the Allure and Robot report for zero-ambiguity bug reporting.
+---
+
+#### 🔍 Anatomy of Human-Readable Pabot Results (`log.html` & Console)
+
+When an executive, QA lead, or auditor opens [`artifacts/reports/pabot_results/log.html`](file:///c:/Users/Junko/Downloads/ragllmorch/artifacts/reports/pabot_results/log.html), every layer of the test execution is structured in plain, unambiguous English:
+
+| Result Layer | What the Engineer / Stakeholder Sees | Why It Makes 100% Sense (Zero Cryptic Code) |
+| :--- | :--- | :--- |
+| **1. Test Case Title** | `TC-UI-01: Verify Application Landing Page Reachability, Brand Logo & Document Title Contract` | Immediately identifies the business domain (`UI`), test category (`Reachability`), and exact contract being verified without opening source code. |
+| **2. Documentation Block** | `[ASPICE Trace: REQ-SYS-NAV-001 \| Persona: Anonymous Visitor]`<br>`Business Objective: Ensure that the public web application root route is reachable, loads within SLA (<4.0s), has a valid document title, and visibly renders core layout structure without HTTP 500 error boundaries.`<br>`Acceptance Criteria: HTTP 200 OK, title is non-empty, and DOM containers are intact.` | Communicates the **Why**, **Who**, and **What** to product owners, auditors, and SDETs. Establishes bidirectional traceability to requirements. |
+| **3. BDD Given/When/Then Tree** | `► Given the test engineer initializes an isolated browser session for route https://google.com`<br>`► When the page DOM content and interactive elements load`<br>`► Then the destination URL should be reachable`<br>`► And the page title should not be empty`<br>`► And the primary structural sections should be visible` | Formats the verification as a natural user journey narrative rather than raw code commands. |
+| **4. Keyword Action Milestones** | `[SUT] [ACTION] Navigating browser worker to: https://google.com`<br>`[SUT] [SUCCESS] Destination loaded in 0.842s. Current Title: 'Google'`<br>`[SUT] [VERIFY] Inspecting DOM layout containers (header, nav, main, section, footer)...`<br>`[SUT] [PASS] Verified structural layout integrity: Found 12 layout blocks without DOM collapse.` | Emits real-time milestone telemetry via Robot Framework's built-in logger (`robot.api.logger`) so that every click, navigation, and validation is recorded with timestamps and metrics. |
+| **5. Failure Evidence (If Detected)** | `[FAILURE DETECTED] Screenshot evidence captured: artifacts/screencast/TC-UI-01_failure.png`<br>`AssertionError: Expected input field to retain 'QA Enterprise Verification' but found empty string.` | Pinpoints the exact root-cause assertion failure with attached screenshot evidence for instant, zero-ambiguity bug triage. |
+
+---
+
+#### 💡 Key Principles of ATP's Human-Readable Testing Standard:
+1. **Zero Cryptic Technical Jargon**: Instead of cryptic statements like `click //div[3]/button[2] -> OK`, the logs explicitly read: `[ACTION] Clicking button 'Sign In' -> [PASS] Interactive buttons responded without client-side script errors.`
+2. **Multi-Discipline Cohesion**: Whether reviewing a Selenium UI test, a Pytest API test, a k6 performance run, or a Robot Framework suite, all test scripts share identical BDD personas, structured docstrings, and informative assertion diagnostics.
+3. **Audit & Compliance Readiness**: Reports can be exported directly into PDF or attached to regulatory submissions (ASPICE, ISO 26262, SOC-2, FDA 21 CFR Part 11) without requiring engineering translation.
 
 ---
 
