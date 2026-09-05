@@ -100,26 +100,104 @@ Automated UI execution introduces both infrastructure compute and trace analysis
 
 ### 2. Comprehensive Cost Matrix: Full Lifecycle per Run & Monthly Scale
 
-The table below contrasts the actual costs across all three stages: **Test Creation** (150k In / 45k Out), **Playwright Cloud Browser Execution** (50 tests), and **Post-Run Test Triage** (10 Failures: 125k In / 25k Out).
+The tables below contrast the actual costs across all three stages: **Test Creation** (150k In / 45k Out), **Playwright Cloud Browser Execution** (50 tests), and **Post-Run Test Triage** (10 Failures: 125k In / 25k Out).
+
+<!-- BEGIN_COST_MATRIX_USD -->
+#### A. USD ($) Global Pricing Matrix
 
 | Model / Provider | Input Price / 1M | Output Price / 1M | Test Creation Cost | Post-Run Triage Cost (10 Failures) | Playwright Cloud Runner | Total Cost per Full Lifecycle Run | Monthly Bill: Small Team (500 Runs) | Monthly Bill: Enterprise CI/CD (1,500 Runs) | Annual Cloud Bill (1,500 Runs / mo) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Anthropic Claude 3.5 Sonnet** | $3.00 | $15.00 | $1.125 | $0.750 | $0.200 | **$2.075** | $1,037.50 | $3,112.50 | **$37,350.00** |
-| **OpenAI GPT-4o** | $2.50 | $10.00 | $0.825 | $0.563 | $0.200 | **$1.588** | $794.00 | $2,382.00 | **$28,584.00** |
-| **Google Gemini 1.5 Pro** | $1.25 | $5.00 | $0.413 | $0.281 | $0.200 | **$0.894** | $447.00 | $1,341.00 | **$16,092.00** |
-| **Anthropic Claude 3.5 Haiku** | $0.80 | $4.00 | $0.300 | $0.200 | $0.200 | **$0.700** | $350.00 | $1,050.00 | **$12,600.00** |
-| **DeepSeek-R1 (Cloud API)** | $0.55 | $2.19 | $0.181 | $0.124 | $0.200 | **$0.505** | $252.50 | $757.50 | **$9,090.00** |
-| **OpenAI GPT-4o-mini** | $0.15 | $0.60 | $0.050 | $0.034 | $0.200 | **$0.284** | $142.00 | $426.00 | **$5,112.00** |
-| **Enterprise Sovereign ATP (Local DeepSeek-R1 / Qwen2)** | **$0.00** | **$0.00** | **$0.000** | **$0.000** | **$0.000** | **$0.000** | **$0.00** | **$0.00** | **$0.00 (Zero)** |
-
-> [!TIP]
-> **Enterprise Financial Payback & ROI**:
-> An enterprise executing 1,500 lifecycle iterations per month on Claude 3.5 Sonnet spends **$37,350 annually** ($34,350 in tokens + $3,000 in cloud browser minutes). 
-> An $800 off-the-shelf developer laptop running Enterprise Sovereign ATP delivers **100% financial payback in just 8 business days**, saving over **$37,000 every single year** while keeping all intellectual property on-premise.
+| **OpenAI GPT-4o** | $2.50 | $10.00 | $0.825 | $0.562 | $0.200 | **$1.587** | $793.75 | $2,381.25 | **$28,575.00** |
+| Google Gemini 1.5 Pro | $1.25 | $5.00 | $0.412 | $0.281 | $0.200 | **$0.894** | $446.88 | $1,340.62 | **$16,087.50** |
+| Anthropic Claude 3.5 Haiku | $0.80 | $4.00 | $0.300 | $0.200 | $0.200 | **$0.700** | $350.00 | $1,050.00 | **$12,600.00** |
+| DeepSeek-R1 (Cloud API) | $0.55 | $2.19 | $0.181 | $0.123 | $0.200 | **$0.505** | $252.28 | $756.83 | **$9,081.90** |
+| **OpenAI GPT-4o-mini** | $0.15 | $0.60 | $0.050 | $0.034 | $0.200 | **$0.283** | $141.62 | $424.88 | **$5,098.50** |
+| **Enterprise Sovereign ATP (Local DeepSeek-R1 / Qwen2)** | $0.00 | $0.00 | $0.000 | $0.000 | $0.000 | **$0.000** | $0.00 | $0.00 | **$0.00** |
+<!-- END_COST_MATRIX_USD -->
 
 ---
 
-### 3. Token Speed, Wall-Clock Execution Time & Tier 1 Rate-Limit Bottlenecks
+<!-- BEGIN_COST_MATRIX_INR -->
+#### B. Indian Currency (INR / ₹) Enterprise Matrix & Statutory Landed Cost
+
+> [!NOTE]
+> **Enterprise Indian Cost Formulation**:
+> * **Base Exchange Rate**: 1 USD = ₹87.00.
+> * **18.0% Statutory GST**: Applied to cross-border OIDAR digital and AI cloud services invoiced from abroad (OpenAI, Anthropic, AWS).
+> * **3.5% Forex & International Card Markup**: Standard banking/corporate card foreign currency conversion markup.
+> * **Effective Landed Enterprise Rate**: **₹105.70 per $1.00 USD**.
+
+| Model / Provider | Input Price / 1M (₹) | Output Price / 1M (₹) | Test Creation (₹) | Post-Run Triage (10 Failures) (₹) | Playwright Cloud (₹) | Total Cost per Single Run (₹) | Monthly Bill: Small Team (500 Runs) | Monthly Bill: Enterprise CI/CD (1,500 Runs) | Annual Cloud Bill (1,500 Runs / mo) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Anthropic Claude 3.5 Sonnet** | ₹317.11 | ₹1585.57 | ₹118.92 | ₹79.28 | ₹21.14 | **₹219.34** | ₹1.10 L | ₹3.29 L | **₹39.48 L** |
+| **OpenAI GPT-4o** | ₹264.26 | ₹1057.05 | ₹87.21 | ₹59.46 | ₹21.14 | **₹167.81** | ₹83,903.34 | ₹2.52 L | **₹30.21 L** |
+| Google Gemini 1.5 Pro | ₹132.13 | ₹528.52 | ₹43.60 | ₹29.73 | ₹21.14 | **₹94.47** | ₹47,236.92 | ₹1.42 L | **₹17.01 L** |
+| Anthropic Claude 3.5 Haiku | ₹84.56 | ₹422.82 | ₹31.71 | ₹21.14 | ₹21.14 | **₹73.99** | ₹36,996.75 | ₹1.11 L | **₹13.32 L** |
+| DeepSeek-R1 (Cloud API) | ₹58.14 | ₹231.49 | ₹19.14 | ₹13.05 | ₹21.14 | **₹53.33** | ₹26,666.73 | ₹80,000.19 | **₹9.60 L** |
+| **OpenAI GPT-4o-mini** | ₹15.86 | ₹63.42 | ₹5.23 | ₹3.57 | ₹21.14 | **₹29.94** | ₹14,970.47 | ₹44,911.41 | **₹5.39 L** |
+| **Enterprise Sovereign ATP (Local DeepSeek-R1 / Qwen2)** | ₹0.00 | ₹0.00 | ₹0.00 | ₹0.00 | ₹0.00 | **₹0.00** | ₹0.00 | ₹0.00 | **₹0.00 (Zero)** |
+<!-- END_COST_MATRIX_INR -->
+
+<!-- BEGIN_ROI_SUMMARY -->
+> [!TIP]
+> **Enterprise Financial Payback & ROI (Indian Market Reality)**:
+> * **Annual Cloud Bleed**: An Indian tech team or IT services enterprise executing 1,500 automated regression runs/month on Claude 3.5 Sonnet spends **₹39,48,081.75 (₹39.48 L) annually** in cloud API invoices. On GPT-4o, the annual cloud bill is **₹30,20,520.37 (₹30.21 L)**.
+> * **One-Time Laptop CapEx in India**: An off-the-shelf developer laptop (Lenovo LOQ / Acer Nitro / ASUS TUF with NVIDIA RTX 3050 4GB VRAM) costs **₹65,000.00**.
+> * **Power Consumption**: Drawing ~80W TDP during CUDA inference at commercial peak tariff (₹8.50/kWh) costs **~₹1,650 per year**.
+> * **Break-Even Velocity**: The entire laptop pays for itself in **just 6 business days** compared to Claude 3.5 Sonnet, and **8 business days** compared to GPT-4o!
+> * **Annual Net Capital Retained**: Saves over **₹39.48 L every single year per QA squad** while maintaining 100% data sovereignty.
+<!-- END_ROI_SUMMARY -->
+
+### 3. Interactive Usage Calculator & Self-Updating README Tool
+
+Enterprise ATP includes a built-in CLI utility (`calculate_costs.py` and [`scripts/calculate_and_update_readme_costs.py`](file:///c:/Users/Junko/Downloads/ragllmorch/scripts/calculate_and_update_readme_costs.py)) that allows you to calculate token burn, convert costs to Indian Rupees (INR / ₹) with statutory enterprise taxation (GST + Forex markup), and **dynamically update the cost tables in this README file in-place**:
+
+#### Quickstart Usage Commands
+
+1. **Calculate Costs & Print Live Terminal Matrix**:
+   ```bash
+   python calculate_costs.py
+   ```
+   *Computes full-lifecycle costs for all 6 major LLM providers across USD ($) and Indian Rupees (INR / ₹) using current standard rates.*
+
+2. **Auto-Detect Token Burn from Local Run Logs**:
+   ```bash
+   python calculate_costs.py --from-logs
+   ```
+   *Scans `artifacts/logs/engine_trace.jsonl` to calculate actual average prompt and completion tokens consumed by your real test runs.*
+
+3. **Simulate Custom Parameters (Run Volume, Exchange Rates, GST)**:
+   ```bash
+   python calculate_costs.py --runs-per-month 2000 --usd-inr 88.5 --gst-pct 18.0 --forex-pct 3.5
+   ```
+
+4. **Update This README In-Place**:
+   ```bash
+   python calculate_costs.py --update-readme
+   ```
+   *Directly recalculates and overwrites the USD and INR pricing tables and ROI summary in this README with your custom parameters!*
+
+#### CLI Parameter Reference
+
+| Flag | Default | Description |
+| :--- | :---: | :--- |
+| `--update-readme` | `False` | Overwrites the tables and ROI summary in `README.md` in-place |
+| `--from-logs` | `False` | Scans local `engine_trace.jsonl` to extract actual token averages |
+| `--usd-inr` | `87.00` | Base USD to INR exchange rate |
+| `--gst-pct` | `18.0%` | Statutory Indian GST on cross-border cloud SaaS/API invoices |
+| `--forex-pct` | `3.5%` | Bank forex & international card conversion markup |
+| `--creation-in` | `150,000` | Input tokens consumed during Test Creation stage |
+| `--creation-out` | `45,000` | Output tokens generated during Test Creation stage |
+| `--triage-in` | `125,000` | Input tokens consumed for 10-failure Triage stage |
+| `--triage-out` | `25,000` | Output tokens generated for 10-failure Triage stage |
+| `--browser-cost` | `$0.20` | Cloud browser runner execution fee per 50-test run |
+| `--enterprise-runs` | `1,500` | Monthly enterprise CI/CD execution volume |
+| `--laptop-cost-inr`| `₹65,000` | Local developer laptop cost in INR (RTX 3050 4GB) |
+
+---
+
+### 4. Token Speed, Wall-Clock Execution Time & Tier 1 Rate-Limit Bottlenecks
 
 A critical flaw with relying on commercial LLM cloud providers for automated testing is **Tier 1 Rate Limiting (TPM/RPM caps)**.
 
@@ -143,7 +221,7 @@ A critical flaw with relying on commercial LLM cloud providers for automated tes
 
 ---
 
-### 4. Data Sovereignty Justification: Why Cloud Triage is a Critical Risk
+### 5. Data Sovereignty Justification: Why Cloud Triage is a Critical Risk
 
 While sending test creation prompts to the cloud carries code exposure risks, **sending post-execution test triage logs to cloud LLMs is an even more severe security violation**:
 1. **Raw Database Dumps & SQL Errors**: When an API test fails with an HTTP 500 error, backend stack traces often dump table schemas, column names, raw SQL queries, and database connection strings into the response payload.
