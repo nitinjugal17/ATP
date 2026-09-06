@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enterprise QA Architecture & ROI Evaluation: Sovereign ATP vs. Cloud Ecosystems</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Mermaid.js for Native Interactive UML Diagram Rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              900: '#0c4a6e',
+            },
+            slate: {
+              850: '#111827',
+              900: '#0f172a',
+              950: '#020617',
+            }
+          }
+        }
+      }
+    };
+
+    // Initialize Mermaid with Dark Tech Theme
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      fontFamily: 'JetBrains Mono',
+      themeVariables: {
+        darkMode: true,
+        background: '#090d16',
+        primaryColor: '#0369a1',
+        primaryTextColor: '#f8fafc',
+        primaryBorderColor: '#38bdf8',
+        lineColor: '#38bdf8',
+        secondaryColor: '#1e293b',
+        tertiaryColor: '#0f172a',
+        mainBkg: '#0f172a',
+        nodeBorder: '#0284c7',
+        clusterBkg: '#090d16',
+        clusterBorder: '#1e293b',
+        defaultLinkColor: '#7dd3fc',
+        actorBkg: '#0369a1',
+        actorBorder: '#38bdf8',
+        actorTextColor: '#ffffff',
+        signalColor: '#38bdf8',
+        signalTextColor: '#f8fafc',
+        labelBoxBkgColor: '#0f172a',
+        labelBoxBorderColor: '#38bdf8',
+        labelTextColor: '#f8fafc',
+        loopTextColor: '#f8fafc',
+        noteBorderColor: '#0284c7',
+        noteBkgColor: '#0c4a6e',
+        noteTextColor: '#f8fafc'
+      }
+    });
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .mermaid svg {
+      max-width: 100% !important;
+      height: auto !important;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-sky-500 selection:text-white">
+
+  <!-- TOP HEADER & CONTROLS -->
+  <header class="sticky top-0 z-50 w-full border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="h-9 w-9 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center font-black text-white text-lg tracking-wider shadow-lg shadow-sky-500/20">
+          ATP
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight text-white flex items-center gap-2">
+            Autonomous Test Platform
+            <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800">Sovereign Architecture</span>
+          </h1>
+          <p class="text-xs text-slate-400 hidden sm:block">Executive Architectural Feasibility & Total Cost of Ownership Proposal</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <!-- Currency Switcher -->
+        <div class="flex items-center bg-slate-900 p-1 rounded-lg border border-slate-800">
+          <button id="curr-usd" onclick="setCurrency('USD')" class="px-3 py-1 rounded text-xs font-semibold transition-all bg-sky-600 text-white shadow">
+            USD ($)
+          </button>
+          <button id="curr-inr" onclick="setCurrency('INR')" class="px-3 py-1 rounded text-xs font-semibold transition-all text-slate-400 hover:text-white">
+            INR (₹ Landed)
+          </button>
+        </div>
+
+        <a href="#calculator" class="hidden md:inline-flex items-center px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white shadow-md transition-all">
+          ⚡ Interactive ROI Simulator
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex gap-8">
+    
+    <!-- STICKY SIDEBAR NAVIGATION -->
+    <aside class="hidden lg:block w-64 shrink-0">
+      <div class="sticky top-24 space-y-1 text-sm font-sans">
+        <div class="px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">Executive Agenda</div>
+        <a href="#executive-summary" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">1. Executive Summary</a>
+        <a href="#trilemma" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">2. The Enterprise QA Trilemma</a>
+        <a href="#calculator" class="block px-3 py-2 rounded-lg text-sky-400 font-semibold hover:bg-slate-900 transition-colors">3. Interactive TCO Calculator</a>
+        <a href="#component-uml" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">4. 🏗️ Component Architecture UML</a>
+        <a href="#sequence-uml" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">5. 🔄 End-to-End Sequence UML</a>
+        <a href="#cost-breakdown" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">6. Verified Market Cost Matrix</a>
+        <a href="#cloud-vs-local" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">7. Cloud vs. Local & DevOps TCO</a>
+        <a href="#future-projections" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">8. 1-, 3- & 5-Year Horizon Models</a>
+        <a href="#hardware-architectures" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">9. Laptop vs. Shared Server Rig</a>
+        <a href="#code-gallery" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">10. Multi-Discipline Code Gallery</a>
+        <a href="#self-healing-demo" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">11. AST Self-Healing Mechanics</a>
+        <a href="#decision-framework" class="block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors">12. Recommendation & Sign-Off</a>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT BODY -->
+    <main class="flex-1 min-w-0 space-y-16">
+      
+      <!-- HERO & EXECUTIVE SUMMARY -->
+      <section id="executive-summary" class="space-y-6 pt-2">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-800 text-sky-400 text-xs font-mono">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+          </span>
+          Production-Ready Architecture | ASPICE Level 2/3 Traceable
+        </div>
+        
+        <div class="space-y-3">
+          <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
+            Sovereign Autonomous Test Platform: <br />
+            <span class="bg-gradient-to-r from-sky-400 via-indigo-300 to-teal-300 bg-clip-text text-transparent">
+              Eliminating Cloud Token Bleed & Data Leakage at Scale
+            </span>
+          </h2>
+          <p class="text-base text-slate-300 leading-relaxed max-w-4xl">
+            Modern enterprise test automation generates massive prompt volumes during recon DOM crawling, dynamic code synthesis, and automated failure triage. Enterprise ATP replaces fragile SaaS subscriptions and variable cloud LLM billing with a deterministic, air-gapped on-premise orchestrator running local open-weight models with zero data egress.
+          </p>
+        </div>
+
+        <!-- Metric Tiles -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
+          <div class="glass-panel p-4 rounded-xl border border-slate-800">
+            <div class="text-xs font-mono text-slate-400 uppercase">Single Run Token Cost</div>
+            <div class="text-2xl font-extrabold text-emerald-400 mt-1">$0.00</div>
+            <div class="text-[11px] text-slate-500 mt-0.5">100% Local CUDA Ingest</div>
+          </div>
+          <div class="glass-panel p-4 rounded-xl border border-slate-800">
+            <div class="text-xs font-mono text-slate-400 uppercase">Data Sovereignty</div>
+            <div class="text-2xl font-extrabold text-sky-400 mt-1">100% Air-Gapped</div>
+            <div class="text-[11px] text-slate-500 mt-0.5">ASPICE, SOC 2, HIPAA, GDPR</div>
+          </div>
+          <div class="glass-panel p-4 rounded-xl border border-slate-800">
+            <div class="text-xs font-mono text-slate-400 uppercase">5-Squad Server Payback</div>
+            <div class="text-2xl font-extrabold text-amber-400 mt-1">16.4 Days</div>
+            <div class="text-[11px] text-slate-500 mt-0.5">Vs. Claude 3.5/3.7 Sonnet API</div>
+          </div>
+          <div class="glass-panel p-4 rounded-xl border border-slate-800">
+            <div class="text-xs font-mono text-slate-400 uppercase">Rate Limits (TPM/RPM)</div>
+            <div class="text-2xl font-extrabold text-purple-400 mt-1">Zero Limits</div>
+            <div class="text-[11px] text-slate-500 mt-0.5">No HTTP 429 backoff sleeps</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 2: THE ENTERPRISE QA TRILEMMA -->
+      <section id="trilemma" class="glass-panel rounded-2xl p-6 sm:p-8 border border-slate-800 space-y-6">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2.5">
+          <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">02</span>
+          The Enterprise QA Architectural Trilemma
+        </h3>
+        
+        <p class="text-sm text-slate-300 leading-relaxed">
+          Traditional solutions force teams to sacrifice at least one non-negotiable pillar:
+        </p>
+
+        <div class="grid sm:grid-cols-3 gap-5 text-sm">
+          <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+            <div class="text-rose-400 font-bold flex items-center gap-2">
+              <span>✕</span> Manual Open-Source (Playwright)
+            </div>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Zero software licensing cost, but creates extreme developer maintenance overhead. SDETs spend <strong>35%–45% of working hours</strong> repairing dynamic DOM locators. Zero autonomous test creation.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+            <div class="text-amber-400 font-bold flex items-center gap-2">
+              <span>⚠</span> Commercial AI SaaS (Mabl/Testim)
+            </div>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Provides low-code authoring and cloud self-healing, but locks teams into escalating $18k–$45k/year SaaS tiers. Transmits proprietary DOM trees and tokens outside the enterprise perimeter.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+            <div class="text-emerald-400 font-bold flex items-center gap-2">
+              <span>✓</span> Sovereign Enterprise ATP
+            </div>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Combines multi-discipline autonomous generation, AST locator self-healing, and absolute data isolation. Runs locally on budget or centralized hardware with <strong>zero per-token charges</strong>.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 3: INTERACTIVE TCO & ROI CALCULATOR -->
+      <section id="calculator" class="glass-panel rounded-2xl p-6 sm:p-8 border border-sky-900/40 space-y-8 relative overflow-hidden">
+        <div class="absolute -right-20 -top-20 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-5">
+          <div>
+            <h3 class="text-xl font-bold text-white flex items-center gap-2.5">
+              <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">03</span>
+              Interactive Enterprise ROI & TCO Simulator
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Adjust your enterprise scale to calculate exact real-time cloud bills vs. on-prem hardware payback.</p>
+          </div>
+          <span class="text-xs font-mono px-3 py-1 rounded bg-slate-900 text-sky-400 border border-slate-700">Real-Time Engine</span>
+        </div>
+
+        <div class="grid lg:grid-cols-12 gap-8">
+          <!-- Controls Column -->
+          <div class="lg:col-span-6 space-y-5">
+            <div>
+              <div class="flex justify-between text-xs font-semibold mb-2">
+                <span class="text-slate-300">Active Engineering Squads:</span>
+                <span id="calc-squads-val" class="font-mono text-sky-400 font-bold">5 Squads</span>
+              </div>
+              <input id="calc-squads" type="range" min="1" max="25" value="5" step="1" oninput="recalcROI()" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+              <div class="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                <span>1 Squad</span>
+                <span>5 Squads</span>
+                <span>15 Squads</span>
+                <span>25 Squads</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs font-semibold mb-2">
+                <span class="text-slate-300">Monthly Runs per Squad (CI/CD PRs + Nightly):</span>
+                <span id="calc-runs-val" class="font-mono text-sky-400 font-bold">1,500 Runs</span>
+              </div>
+              <input id="calc-runs" type="range" min="200" max="4000" value="1500" step="100" oninput="recalcROI()" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+              <div class="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                <span>200 Runs</span>
+                <span>1,500 Runs</span>
+                <span>4,000 Runs</span>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-2">Proposed Local Target Hardware Architecture:</label>
+              <select id="calc-hardware" onchange="recalcROI()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                <option value="laptop">Budget Developer Laptop (RTX 3050 4GB) - $750 / ₹65k CapEx (Single Squad)</option>
+                <option value="single4090">Workstation Tier 1 (Single RTX 4090 24GB) - $3,600 / ₹3.75L CapEx</option>
+                <option value="dual4090" selected>Shared Server Tier 2 (Dual RTX 4090 48GB) - $8,500 / ₹8.95L CapEx (Recommended)</option>
+                <option value="ada6000">Enterprise Rackmount Tier 3 (RTX 6000 Ada 48GB ECC) - $13,800 / ₹14.5L CapEx</option>
+              </select>
+            </div>
+
+            <div class="p-3.5 rounded-lg bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+              <div class="font-semibold text-slate-300 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-sky-400" fill="currentColor" viewBox="0 0 20 20"><path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"></path></svg>
+                Lifecycle Token Formula Included
+              </div>
+              <p>Creation: 150k in / 45k out | Cloud Browser: $0.20/run | 10-Failure Triage: 125k in / 25k out. Total: 275k prompt + 70k completion tokens per lifecycle run.</p>
+            </div>
+          </div>
+
+          <!-- Dynamic Output Card -->
+          <div class="lg:col-span-6 bg-slate-900 rounded-xl p-5 border border-slate-800 flex flex-col justify-between space-y-4">
+            <div>
+              <div class="text-xs font-mono text-slate-400 uppercase tracking-wider">Financial Projection (Live)</div>
+              <div class="text-xs text-slate-400 mt-0.5">Total Organization Runs: <span id="out-total-runs" class="text-white font-mono font-bold">7,500</span> runs/month</div>
+            </div>
+
+            <div class="space-y-3">
+              <div class="flex justify-between items-baseline border-b border-slate-800/80 pb-2">
+                <span class="text-xs text-slate-300">Claude 3.5/3.7 Sonnet Cloud Bill:</span>
+                <span id="out-claude-cost" class="font-mono font-bold text-rose-400 text-sm">$15,562 / mo</span>
+              </div>
+              <div class="flex justify-between items-baseline border-b border-slate-800/80 pb-2">
+                <span class="text-xs text-slate-300">OpenAI GPT-4o Cloud Bill:</span>
+                <span id="out-gpt-cost" class="font-mono font-bold text-amber-400 text-sm">$11,906 / mo</span>
+              </div>
+              <div class="flex justify-between items-baseline border-b border-slate-800/80 pb-2">
+                <span class="text-xs text-slate-300">Commercial SaaS (Mabl / Testim):</span>
+                <span id="out-saas-cost" class="font-mono font-bold text-orange-400 text-sm">$7,500 / mo</span>
+              </div>
+              <div class="flex justify-between items-baseline border-b border-slate-800/80 pb-2">
+                <span class="text-xs text-slate-300">Selected Hardware CapEx:</span>
+                <span id="out-hardware-capex" class="font-mono font-bold text-sky-400 text-sm">$8,500 (One-Time)</span>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-lg bg-sky-950/40 border border-sky-800/60 space-y-1.5">
+              <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider font-mono">Break-Even Amortization Velocity</div>
+              <div class="text-2xl font-black text-white" id="out-payback-days">16.4 Operating Days</div>
+              <div class="text-[11px] text-slate-300 leading-tight" id="out-payback-desc">
+                The entire dual-GPU server hardware is completely paid for within 16.4 business days compared to public Claude Sonnet API invoices.
+              </div>
+            </div>
+
+            <div class="flex justify-between items-center text-xs font-mono text-slate-400 pt-1">
+              <span>3-Year Net Retained Capital:</span>
+              <span id="out-3yr-savings" class="text-emerald-400 font-bold text-base">+$549,050</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 4: COMPONENT ARCHITECTURE UML -->
+      <section id="component-uml" class="glass-panel rounded-2xl p-6 sm:p-8 border border-slate-800 space-y-8">
+        <div class="border-b border-slate-800 pb-5">
+          <div class="flex items-center gap-2 text-xs font-mono text-sky-400 uppercase tracking-wider">
+            <span class="h-2 w-2 rounded-full bg-sky-400"></span> Generated Files & Boundary Specification
+          </div>
+          <h3 class="text-2xl font-extrabold text-white mt-1 flex items-center gap-2.5">
+            <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">04</span>
+            Component Architecture & Layer Boundary UML
+          </h3>
+          <p class="text-xs text-slate-400 mt-1 max-w-3xl">
+            UML Component diagram illustrating all 4 decoupled architectural layers: Deployment/Orchestration, Ingress & Presentation, Reasoning & AI Engines, and the Distributed Execution & Storage layer.
+          </p>
+        </div>
+
+        <!-- Rendered Mermaid Component Diagram -->
+        <div class="p-4 sm:p-6 rounded-xl bg-slate-950/80 border border-slate-800 overflow-x-auto">
+          <div class="mermaid">
+graph TD
+    subgraph Ops_Deploy["1. Deployment & Container Orchestration"]
+        DOCKER["docker-compose-windows.yml<br/><i>(8 Services: App, Celery, Ollama, Redis, Postgres, MinIO, ES, Allure)</i>"]
+        DFILE["Dockerfile<br/><i>(Python 3.10, Headless Chromium, k6, Allure CLI)</i>"]
+        BATCH["Operational Batch Scripts<br/><i>(START.bat, SETUP.bat, SHUTDOWN.bat, RESET_DB.bat, REBUILD.bat, CLEANUP.bat)</i>"]
+        RULES[".agents/rules/instructions.md & mcp_config.json<br/><i>(SDET Coding Rules & Tool Definitions)</i>"]
+    end
+
+    subgraph Presentation["2. Ingress & Presentation Layer"]
+        REACT_UI["aspice_qa_framework/static/index.html<br/><i>(React 18 SPA + Monaco Editor + Scope Gate + Live Calibrator + Chat)</i>"]
+        FASTAPI["aspice_qa_framework/main.py<br/><i>(FastAPI REST Gateway, SSE Telemetry Streamer, Scope Gate Handler)</i>"]
+    end
+
+    subgraph Reasoning["3. Reasoning & AI Engines"]
+        MCP_HARNESS["engines/enhanced_mcp_harness.py<br/><i>(Ollama Streaming, Circular Loop Detector, Prefix Cache)</i>"]
+        AI_CORE["engines/ai_core_engine.py<br/><i>(Multi-Suite Code Synthesizer: UI, API, k6, Robot)</i>"]
+        LANGCHAIN["engines/langchain_engine.py<br/><i>(Semantic Chunking, Vector FAISS Index, RAG Retrieval)</i>"]
+        EVALUATOR["engines/llm_evaluator.py<br/><i>(AST Static Validator, SDET Rubric Reviewer, Locator Healer)</i>"]
+        PROBE["engines/hardware_probe.py<br/><i>(VRAM Auto-Scaler, 3-Profile Live Benchmark Runner)</i>"]
+        NIST["engines/nist_scanner.py<br/><i>(Parallel NIST NVD CVE Scanner & Stack Fingerprinter)</i>"]
+    end
+
+    subgraph Execution["4. Distributed Execution & Storage Layer"]
+        WORKER["core/worker.py<br/><i>(Celery Async Distributed Tasks: Crawling, Headless Scraping, Pabot Running)</i>"]
+        EXCEPTIONS["core/exceptions.py<br/><i>(Domain-Specific Fault Taxonomy)</i>"]
+        CLEANUP["core/cleanup.py<br/><i>(Artifact Sweeper & State Purger)</i>"]
+        ROBOT_ROOT["aspice_qa_framework/execution_suite.robot<br/><i>(Robot Framework Root Entrypoint)</i>"]
+        ARTIFACTS["artifacts/<br/><i>(db/, logs/, reports/, scripts/, storage/, allure-results/)</i>"]
+    end
+
+    REACT_UI -->|HTTP / SSE Telemetry| FASTAPI
+    FASTAPI -->|Probe & Hardware Scale| PROBE
+    FASTAPI -->|Scan Infrastructure| NIST
+    FASTAPI -->|Dispatch Crawl / Execution| WORKER
+    FASTAPI -->|Generate Multi-Suite| AI_CORE
+    FASTAPI -->|Evaluate & Self-Heal| EVALUATOR
+
+    AI_CORE -->|Retrieve RAG Context| LANGCHAIN
+    AI_CORE -->|Execute Streaming Inference| MCP_HARNESS
+    MCP_HARNESS -->|VRAM Boundaries & Threads| PROBE
+    EVALUATOR -->|Static AST Analysis & Review| MCP_HARNESS
+
+    WORKER -->|Store Test Runs & Reports| ARTIFACTS
+    DOCKER -.->|Orchestrates| Presentation
+    DOCKER -.->|Orchestrates| Reasoning
+    DOCKER -.->|Orchestrates| Execution
+          </div>
+        </div>
+
+        <!-- Architectural Responsibilities Table -->
+        <div class="space-y-3">
+          <h4 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-sky-400" fill="currentColor" viewBox="0 0 20 20"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"></path></svg>
+            Component File Responsibilities & Design Patterns
+          </h4>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900 font-mono text-slate-400 uppercase text-[11px] border-b border-slate-800">
+                <tr>
+                  <th class="p-3">Component File</th>
+                  <th class="p-3">Layer</th>
+                  <th class="p-3">Primary Architectural Responsibilities</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 font-sans text-xs">
+                <tr class="hover:bg-slate-900/50">
+                  <td class="p-3 font-mono text-sky-400 font-bold">main.py</td>
+                  <td class="p-3 font-mono text-slate-400">Ingress Gateway</td>
+                  <td class="p-3 text-slate-300">Hosts all REST and SSE endpoints (<code class="text-sky-300 font-mono">/api/crawl</code>, <code class="text-sky-300 font-mono">/api/scope_gate/*</code>, <code class="text-sky-300 font-mono">/api/generate_suite</code>, <code class="text-sky-300 font-mono">/api/execute</code>). Implements finite state machines for test synthesis lifecycle.</td>
+                </tr>
+                <tr class="hover:bg-slate-900/50">
+                  <td class="p-3 font-mono text-sky-400 font-bold">index.html</td>
+                  <td class="p-3 font-mono text-slate-400">Presentation</td>
+                  <td class="p-3 text-slate-300">Zero-build React 18 SPA. Integrates Monaco code editor, live Server-Sent Events execution telemetry, Scope Gate approval modal, and embedded Allure dashboard.</td>
+                </tr>
+                <tr class="hover:bg-slate-900/50">
+                  <td class="p-3 font-mono text-sky-400 font-bold">enhanced_mcp_harness.py</td>
+                  <td class="p-3 font-mono text-slate-400">LLM Transport</td>
+                  <td class="p-3 text-slate-300">Industrial Ollama client with streaming buffer, O(1) circular repetition loop detector (<code class="text-sky-300 font-mono">rep_pattern</code>), dynamic prompt prefix caching, and infinite context auto-stitcher.</td>
+                </tr>
+                <tr class="hover:bg-slate-900/50">
+                  <td class="p-3 font-mono text-sky-400 font-bold">hardware_probe.py</td>
+                  <td class="p-3 font-mono text-slate-400">Hardware Governor</td>
+                  <td class="p-3 text-slate-300">Queries <code class="text-sky-300 font-mono">nvidia-smi</code> and system RAM. Dynamically calibrates context window (4k/8k), prevents PCIe bus offloading, and executes 3-profile live hardware benchmarks.</td>
+                </tr>
+                <tr class="hover:bg-slate-900/50">
+                  <td class="p-3 font-mono text-sky-400 font-bold">ai_core_engine.py</td>
+                  <td class="p-3 font-mono text-slate-400">Code Synthesizer</td>
+                  <td class="p-3 text-slate-300">Multi-discipline SDET prompt orchestrator. Synthesizes executable WebdriverIO POM, Pytest BVA, Grafana k6, and Robot Framework suites from crawled DOM trees.</td>
+                </tr>
+                <tr class="hover:bg-slate-900/50">
+                  <td class="p-3 font-mono text-sky-400 font-bold">llm_evaluator.py</td>
+                  <td class="p-3 font-mono text-slate-400">Quality Gate</td>
+                  <td class="p-3 text-slate-300">Executes static syntax verification via Python's native <code class="text-sky-300 font-mono">ast.parse()</code>, scores scripts against corporate SDET rubrics, sanitizes <code class="text-sky-300 font-mono">&lt;think&gt;</code> tags, and triggers in-place locator healing.</td>
+                </tr>
+                <tr class="hover:bg-slate-900/50">
+                  <td class="p-3 font-mono text-sky-400 font-bold">worker.py</td>
+                  <td class="p-3 font-mono text-slate-400">Worker Pool</td>
+                  <td class="p-3 text-slate-300">Celery distributed task definitions for headless Chromium crawling (Crawl4AI) and parallel multi-worker test execution via Pabot.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 5: END-TO-END SEQUENCE UML -->
+      <section id="sequence-uml" class="glass-panel rounded-2xl p-6 sm:p-8 border border-slate-800 space-y-8">
+        <div class="border-b border-slate-800 pb-5">
+          <div class="flex items-center gap-2 text-xs font-mono text-emerald-400 uppercase tracking-wider">
+            <span class="h-2 w-2 rounded-full bg-emerald-400"></span> Deterministic Execution Protocol
+          </div>
+          <h3 class="text-2xl font-extrabold text-white mt-1 flex items-center gap-2.5">
+            <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">05</span>
+            End-to-End Application & Inference Sequence UML
+          </h3>
+          <p class="text-xs text-slate-400 mt-1 max-w-3xl">
+            Detailed sequence diagram illustrating the complete lifecycle: parallel crawler recon, human-in-the-loop Scope Gate, RAG FAISS chunking, hardware-governed streaming inference, AST self-healing loop, and Pabot parallel Allure reporting.
+          </p>
+        </div>
+
+        <!-- Rendered Mermaid Sequence Diagram -->
+        <div class="p-4 sm:p-6 rounded-xl bg-slate-950/80 border border-slate-800 overflow-x-auto">
+          <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Architect as QA Architect / PO
+    participant UI as React 18 Dashboard (index.html)
+    participant Core as FastAPI Gateway (main.py)
+    participant Crawler as Celery Worker / Chromium (worker.py)
+    participant NIST as NIST Scanner (nist_scanner.py)
+    participant RAG as RAG Context Engine (langchain_engine.py)
+    participant Governor as Hardware Governor (hardware_probe.py)
+    participant Ollama as Local LLM (ollama_engine)
+    participant SDET as AST Evaluator & Healer (llm_evaluator.py)
+    participant Pabot as Pabot Runner (execution_suite.robot)
+    participant Allure as Allure Reporting Server
+
+    %% STAGE 1 & 2: RECON & CRAWL
+    Architect->>UI: Enters Target URL & Clicks "Start Crawl & Recon"
+    UI->>Core: POST /api/crawl {url, depth, auth}
+    par Parallel Recon
+        Core->>NIST: scan_target(url)
+        NIST-->>Core: Detected Stacks & NIST CVE Vulnerabilities
+    and Headless Web Spider
+        Core->>Crawler: dispatch_crawl_task(url)
+        Crawler-->>Core: Raw DOM Trees, Network HAR, Discovered Routes
+    end
+
+    %% STAGE 3: SCOPE GATE (HITL)
+    Core->>UI: SSE: Discovered Routes & Token Burn Estimation
+    Note over Architect, UI: Stage Gate: Human-in-the-Loop Review
+    Architect->>UI: Selects Routes, Attack Vectors & Clicks "Approve & Generate"
+    UI->>Core: POST /api/scope_gate/approve {selected_routes, settings}
+
+    %% STAGE 4: SANITIZATION & RAG
+    Core->>RAG: sanitize_and_chunk(DOM, MRD, OpenAPI)
+    Note over RAG: Multi-Stage Input Sanitization:<br/>1. Strip dynamic IDs, tokens, timestamps<br/>2. Strip CSS styles & tracking boilerplate<br/>3. Compute embeddings & build FAISS vector index
+    RAG-->>Core: Top-k Relevant Context Chunks (3k-4.5k chars)
+
+    %% HARDWARE GOVERNANCE & INFERENCE
+    Core->>Governor: probe_and_scale_vram_resources(model, concurrency, ctx)
+    Governor-->>Core: Allocated Config: 8k Ctx, 1024 Batch, 100% CUDA GPU
+    Core->>Ollama: POST /api/generate (Streaming JSON, System Prompt, RAG Context)
+    
+    loop Real-time Streaming & Repetition Breaker
+        Ollama-->>Core: Stream Token Chunks (eval_count, prompt_eval_count)
+        Note over Core: O(1) Circular Tail Buffer:<br/>Detects repetitive token loops & triggers auto-continuation
+        Core->>UI: SSE: Real-Time Token Generation Stream (88 tok/s)
+    end
+    Ollama-->>Core: Raw Completion Stream Finished
+
+    %% STAGE 5: OUTPUT SANITIZATION & AST VALIDATION
+    Core->>SDET: validate_and_review(generated_script)
+    Note over SDET: Output Sanitization:<br/>1. Strip &lt;think&gt; tags & Markdown code fences<br/>2. Run Python ast.parse() syntax validation<br/>3. Execute sandboxed dry-run in headless runner
+
+    alt AST Syntax Failure or Broken Locator Detected
+        Note over SDET, Core: Dynamic Self-Healing Loop Triggered
+        SDET->>Ollama: Re-prompt with Failure Stack Trace + Clean DOM Context
+        Ollama-->>SDET: Patched Locators & Corrected Code
+        Note over SDET: Re-Sanitize & Verify AST Tree
+    end
+    SDET-->>Core: Validated, Clean Executable Test Suites
+
+    %% STAGE 6: EXECUTION & REPORTING
+    Core->>Pabot: Execute Suites in Parallel (4 Workers)
+    Pabot-->>Core: Test Result Artifacts & XML Traces
+    Core->>Allure: generate_report(artifacts/reports/allure-results)
+    Allure-->>Core: Compiled Single-File Interactive HTML Report
+    Core->>UI: SSE: "Execution Complete" -> Render Allure Iframe
+    UI-->>Architect: Displays Interactive Test Dashboard & Metrics
+          </div>
+        </div>
+
+        <!-- Sequence Stage Narrative -->
+        <div class="grid sm:grid-cols-3 gap-4 text-xs">
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="text-sky-400 font-bold font-mono">Stages 1–3: Recon & Scope Gate</div>
+            <p class="text-slate-400 leading-relaxed">
+              Headless Chromium spiders the target while NIST scanner fingerprinters backend CVEs. The <strong>Scope Gate</strong> pauses execution, allowing the QA Lead to inspect discovered routes and token estimations before authoring begins.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="text-purple-400 font-bold font-mono">Stage 4: Sanitization & Inference</div>
+            <p class="text-slate-400 leading-relaxed">
+              Dynamic IDs and session tokens are stripped from DOMs (saving 40% VRAM). The hardware governor allocates 100% CUDA VRAM, streaming tokens at 88 tok/s with an O(1) circular repetition loop breaker.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="text-emerald-400 font-bold font-mono">Stages 5–6: AST Heal & Pabot</div>
+            <p class="text-slate-400 leading-relaxed">
+              Python scripts pass through <code class="text-sky-300 font-mono">ast.parse()</code>. Failing locators are dynamically re-prompted and healed before Pabot executes the suites across 4 CPU cores, compiling into interactive Allure reports.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 6: VERIFIED MARKET COST MATRIX -->
+      <section id="cost-breakdown" class="space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <div>
+            <h3 class="text-xl font-bold text-white flex items-center gap-2.5">
+              <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">06</span>
+              Verified Enterprise Market Pricing Matrix
+            </h3>
+            <p class="text-xs text-slate-400">Current Q1–Q3 enterprise rates. India landed pricing includes 18% statutory GST + 3.5% forex fee.</p>
+          </div>
+          <span class="text-xs font-mono text-slate-500">Unit: Per Full Lifecycle Run</span>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-800">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900 font-mono text-slate-400 uppercase text-[11px] border-b border-slate-800">
+              <tr>
+                <th class="p-3.5">Model / Platform</th>
+                <th class="p-3.5">Input / 1M</th>
+                <th class="p-3.5">Output / 1M</th>
+                <th class="p-3.5">Cost / Full Run</th>
+                <th class="p-3.5">Monthly (1,500 Runs)</th>
+                <th class="p-3.5">Annual Bill (1,500 Runs)</th>
+                <th class="p-3.5 text-right">Data Security Tier</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60 font-mono">
+              <tr class="hover:bg-slate-900/50">
+                <td class="p-3.5 font-bold text-white font-sans">Anthropic Claude 3.5 / 3.7 Sonnet</td>
+                <td class="p-3.5 curr-val" data-usd="3.00">$3.00</td>
+                <td class="p-3.5 curr-val" data-usd="15.00">$15.00</td>
+                <td class="p-3.5 font-bold text-rose-400 curr-val" data-usd="2.075">$2.075</td>
+                <td class="p-3.5 curr-val" data-usd="3112.50">$3,112.50</td>
+                <td class="p-3.5 font-bold curr-val" data-usd="37350.00">$37,350.00</td>
+                <td class="p-3.5 text-right text-rose-400 font-sans">Public Cloud (High Risk)</td>
+              </tr>
+              <tr class="hover:bg-slate-900/50">
+                <td class="p-3.5 font-bold text-white font-sans">OpenAI GPT-4o</td>
+                <td class="p-3.5 curr-val" data-usd="2.50">$2.50</td>
+                <td class="p-3.5 curr-val" data-usd="10.00">$10.00</td>
+                <td class="p-3.5 font-bold text-amber-400 curr-val" data-usd="1.588">$1.588</td>
+                <td class="p-3.5 curr-val" data-usd="2381.25">$2,381.25</td>
+                <td class="p-3.5 font-bold curr-val" data-usd="28575.00">$28,575.00</td>
+                <td class="p-3.5 text-right text-rose-400 font-sans">Public Cloud (High Risk)</td>
+              </tr>
+              <tr class="hover:bg-slate-900/50">
+                <td class="p-3.5 font-bold text-white font-sans">Google Gemini 1.5 Pro</td>
+                <td class="p-3.5 curr-val" data-usd="1.25">$1.25</td>
+                <td class="p-3.5 curr-val" data-usd="5.00">$5.00</td>
+                <td class="p-3.5 font-bold text-amber-400 curr-val" data-usd="0.894">$0.894</td>
+                <td class="p-3.5 curr-val" data-usd="1340.63">$1,340.63</td>
+                <td class="p-3.5 font-bold curr-val" data-usd="16087.50">$16,087.50</td>
+                <td class="p-3.5 text-right text-rose-400 font-sans">Public Cloud (High Risk)</td>
+              </tr>
+              <tr class="hover:bg-slate-900/50">
+                <td class="p-3.5 font-bold text-white font-sans">DeepSeek-R1 (Cloud API)</td>
+                <td class="p-3.5 curr-val" data-usd="0.55">$0.55</td>
+                <td class="p-3.5 curr-val" data-usd="2.19">$2.19</td>
+                <td class="p-3.5 font-bold text-amber-400 curr-val" data-usd="0.505">$0.505</td>
+                <td class="p-3.5 curr-val" data-usd="756.83">$756.83</td>
+                <td class="p-3.5 font-bold curr-val" data-usd="9081.90">$9,081.90</td>
+                <td class="p-3.5 text-right text-amber-400 font-sans">Third-Party Gateway</td>
+              </tr>
+              <tr class="hover:bg-slate-900/50">
+                <td class="p-3.5 font-bold text-white font-sans">OpenAI GPT-4o-mini</td>
+                <td class="p-3.5 curr-val" data-usd="0.15">$0.15</td>
+                <td class="p-3.5 curr-val" data-usd="0.60">$0.60</td>
+                <td class="p-3.5 font-bold text-slate-300 curr-val" data-usd="0.283">$0.283</td>
+                <td class="p-3.5 curr-val" data-usd="424.88">$424.88</td>
+                <td class="p-3.5 font-bold curr-val" data-usd="5098.50">$5,098.50</td>
+                <td class="p-3.5 text-right text-rose-400 font-sans">Public Cloud (High Risk)</td>
+              </tr>
+              <tr class="hover:bg-slate-900/50">
+                <td class="p-3.5 font-bold text-white font-sans">Commercial AI QA SaaS (Mabl / Testim)</td>
+                <td class="p-3.5 text-slate-500 font-sans">SaaS Plan</td>
+                <td class="p-3.5 text-slate-500 font-sans">SaaS Plan</td>
+                <td class="p-3.5 text-slate-500 font-sans">Flat Monthly</td>
+                <td class="p-3.5 curr-val" data-usd="1800.00">$1,800.00</td>
+                <td class="p-3.5 font-bold curr-val" data-usd="21600.00">$21,600.00</td>
+                <td class="p-3.5 text-right text-amber-400 font-sans">Vendor Cloud Storage</td>
+              </tr>
+              <tr class="bg-sky-950/30 border-l-4 border-sky-500">
+                <td class="p-3.5 font-bold text-sky-400 font-sans flex items-center gap-2">
+                  <span class="h-2 w-2 rounded-full bg-emerald-400 inline-block"></span>
+                  Sovereign Enterprise ATP (Local / On-Prem)
+                </td>
+                <td class="p-3.5 font-bold text-emerald-400 curr-val" data-usd="0.00">$0.00</td>
+                <td class="p-3.5 font-bold text-emerald-400 curr-val" data-usd="0.00">$0.00</td>
+                <td class="p-3.5 font-bold text-emerald-400 curr-val" data-usd="0.00">$0.000</td>
+                <td class="p-3.5 font-bold text-emerald-400 curr-val" data-usd="0.00">$0.00</td>
+                <td class="p-3.5 font-bold text-emerald-400 curr-val" data-usd="0.00">$0.00 (Zero)</td>
+                <td class="p-3.5 text-right text-emerald-400 font-sans font-bold">100% Air-Gapped Sovereign</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 7: CLOUD VS. LOCAL LLMS & DEVOPS TCO -->
+      <section id="cloud-vs-local" class="glass-panel rounded-2xl p-6 sm:p-8 border border-slate-800 space-y-8">
+        <div>
+          <h3 class="text-xl font-bold text-white flex items-center gap-2.5">
+            <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">07</span>
+            Architectural Trade-Offs: Cloud LLMs vs. Local Sovereign ATP & DevOps Operational Cost
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">An objective comparison of model capabilities, data security, and true operations/maintenance burdens.</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6 text-xs">
+          <!-- Cloud LLMs Breakdown -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h4 class="text-sm font-bold text-sky-400">Cloud LLM APIs (OpenAI / Anthropic)</h4>
+              <span class="font-mono text-[10px] text-slate-400">Zero Server Hardware</span>
+            </div>
+            
+            <div class="space-y-2">
+              <div class="font-semibold text-emerald-400">Advantages (Pros):</div>
+              <ul class="list-disc list-inside space-y-1 text-slate-300">
+                <li>Immediate access to 200B+ parameter frontier intelligence (Claude 3.7 Sonnet).</li>
+                <li>Zero hardware procurement, server rack space, or physical maintenance.</li>
+                <li>Instant elasticity: Can burst from 1 request to 100 parallel requests instantly.</li>
+                <li>No GPU driver patching or Linux CUDA kernel management.</li>
+              </ul>
+            </div>
+
+            <div class="space-y-2">
+              <div class="font-semibold text-rose-400">Disadvantages & Hidden Costs (Cons):</div>
+              <ul class="list-disc list-inside space-y-1 text-slate-300">
+                <li><strong>Critical Data Exposure:</strong> Error dumps, staging JWT tokens, and database schemas leave the company perimeter (Compliance blocker).</li>
+                <li><strong>Rate Limit Bottlenecks:</strong> Hard Tier-1 limits (30k TPM) cause HTTP 429 throttling and pipeline-stalling backoff sleeps.</li>
+                <li><strong>Continuous OpEx Bleed:</strong> Testing costs scale linearly with test suite size and run frequency.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Local Sovereign LLM Breakdown -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h4 class="text-sm font-bold text-emerald-400">Sovereign On-Premises ATP Rig</h4>
+              <span class="font-mono text-[10px] text-slate-400">Dedicated Hardware Asset</span>
+            </div>
+
+            <div class="space-y-2">
+              <div class="font-semibold text-emerald-400">Advantages (Pros):</div>
+              <ul class="list-disc list-inside space-y-1 text-slate-300">
+                <li><strong>Absolute Sovereignty:</strong> Zero bytes leave the host. 100% air-gap compliant (ASPICE, ISO 26262, SOC 2, HIPAA).</li>
+                <li><strong>Predictable CapEx:</strong> Fixed one-time investment; runs 24/7 at zero marginal token cost.</li>
+                <li><strong>Deterministic Latency:</strong> Local CUDA VRAM eliminates network serialization and API gateway queues.</li>
+                <li><strong>Integrated Multi-Discipline Stack:</strong> UI, API, Load, BDD, and AST Healing out-of-the-box.</li>
+              </ul>
+            </div>
+
+            <div class="space-y-2">
+              <div class="font-semibold text-rose-400">Disadvantages & Maintenance (Cons):</div>
+              <ul class="list-disc list-inside space-y-1 text-slate-300">
+                <li><strong>Initial Hardware Outlay:</strong> Requires upfront server budget ($3,600 to $8,500).</li>
+                <li><strong>Platform Management:</strong> Internal DevOps must maintain Linux OS, Docker daemon, and NVIDIA container drivers.</li>
+                <li><strong>Facility Demands:</strong> Requires ~800W–1200W electrical and cooling capacity for dual-GPU rigs.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Full DevOps Operational Cost Breakdown -->
+        <div class="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-4">
+          <h4 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path></svg>
+            True Annual DevOps & Facility Operating Costs (Tier 2: Dual RTX 4090 Server)
+          </h4>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
+            <div class="p-3 rounded bg-slate-950 border border-slate-800">
+              <div class="text-slate-400 text-[10px]">Continuous Power (1.1kW)</div>
+              <div class="text-white font-bold text-sm mt-1 curr-val" data-usd="920.00">$920 / yr</div>
+              <div class="text-[10px] text-slate-500">Commercial tariff rate</div>
+            </div>
+            <div class="p-3 rounded bg-slate-950 border border-slate-800">
+              <div class="text-slate-400 text-[10px]">Cooling & Rack Overhead</div>
+              <div class="text-white font-bold text-sm mt-1 curr-val" data-usd="350.00">$350 / yr</div>
+              <div class="text-[10px] text-slate-500">Data center facility</div>
+            </div>
+            <div class="p-3 rounded bg-slate-950 border border-slate-800">
+              <div class="text-slate-400 text-[10px]">Sysadmin / DevOps Care</div>
+              <div class="text-white font-bold text-sm mt-1 curr-val" data-usd="1200.00">$1,200 / yr</div>
+              <div class="text-[10px] text-slate-500">~2 hours/month maintenance</div>
+            </div>
+            <div class="p-3 rounded bg-slate-950 border border-slate-800">
+              <div class="text-slate-400 text-[10px]">Total Annualized OpEx</div>
+              <div class="text-emerald-400 font-bold text-sm mt-1 curr-val" data-usd="2470.00">$2,470 / yr</div>
+              <div class="text-[10px] text-slate-500">Complete true facility cost</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 8: FUTURE PROJECTIONS (1, 3, 5 YEARS) -->
+      <section id="future-projections" class="glass-panel rounded-2xl p-6 sm:p-8 border border-slate-800 space-y-6">
+        <div>
+          <h3 class="text-xl font-bold text-white flex items-center gap-2.5">
+            <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">08</span>
+            Long-Run Enterprise Cost Horizon Modeling (1-Year, 3-Year, 5-Year)
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">
+            Projection assumes 5 squads (7,500 runs/mo) scaling by 15% annual test volume, factoring in a 20% annual cloud token price deflation vs. on-prem hardware refresh at Year 3.5.
+          </p>
+        </div>
+
+        <div class="grid sm:grid-cols-3 gap-5 font-mono text-xs">
+          <!-- Year 1 -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+            <div class="flex justify-between items-center text-slate-400 border-b border-slate-800 pb-2">
+              <span class="font-bold uppercase tracking-wider text-sky-400 font-sans">1-Year Horizon</span>
+              <span class="text-[10px]">90,000 Runs</span>
+            </div>
+            <div class="space-y-1.5 text-[11px]">
+              <div class="flex justify-between text-slate-400">
+                <span>Claude 3.5 Cloud:</span>
+                <span class="font-bold text-rose-400 curr-val" data-usd="186750">$186,750</span>
+              </div>
+              <div class="flex justify-between text-slate-400">
+                <span>OpenAI GPT-4o:</span>
+                <span class="font-bold text-amber-400 curr-val" data-usd="142875">$142,875</span>
+              </div>
+              <div class="flex justify-between text-slate-400">
+                <span>Commercial SaaS:</span>
+                <span class="font-bold text-orange-400 curr-val" data-usd="90000">$90,000</span>
+              </div>
+              <div class="flex justify-between text-slate-200 border-t border-slate-800 pt-1.5">
+                <span class="font-bold text-emerald-400">On-Prem ATP Rig:</span>
+                <span class="font-bold text-emerald-400 curr-val" data-usd="10970">$10,970</span>
+              </div>
+              <div class="text-[10px] text-slate-500">($8.5k Server CapEx + $2.47k OpEx)</div>
+            </div>
+            <div class="pt-2 border-t border-slate-800 text-right font-bold text-emerald-400 text-xs">
+              Net Savings: <span class="curr-val" data-usd="175780">+$175,780</span>
+            </div>
+          </div>
+
+          <!-- Year 3 -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+            <div class="flex justify-between items-center text-slate-400 border-b border-slate-800 pb-2">
+              <span class="font-bold uppercase tracking-wider text-sky-400 font-sans">3-Year Horizon</span>
+              <span class="text-[10px]">Amortized Baseline</span>
+            </div>
+            <div class="space-y-1.5 text-[11px]">
+              <div class="flex justify-between text-slate-400">
+                <span>Claude 3.5 Cloud:</span>
+                <span class="font-bold text-rose-400 curr-val" data-usd="472000">$472,000</span>
+              </div>
+              <div class="flex justify-between text-slate-400">
+                <span>OpenAI GPT-4o:</span>
+                <span class="font-bold text-amber-400 curr-val" data-usd="361000">$361,000</span>
+              </div>
+              <div class="flex justify-between text-slate-400">
+                <span>Commercial SaaS:</span>
+                <span class="font-bold text-orange-400 curr-val" data-usd="270000">$270,000</span>
+              </div>
+              <div class="flex justify-between text-slate-200 border-t border-slate-800 pt-1.5">
+                <span class="font-bold text-emerald-400">On-Prem ATP Rig:</span>
+                <span class="font-bold text-emerald-400 curr-val" data-usd="15910">$15,910</span>
+              </div>
+              <div class="text-[10px] text-slate-500">(Zero new CapEx + 3-yr OpEx)</div>
+            </div>
+            <div class="pt-2 border-t border-slate-800 text-right font-bold text-emerald-400 text-xs">
+              Net Savings: <span class="curr-val" data-usd="456090">+$456,090</span>
+            </div>
+          </div>
+
+          <!-- Year 5 -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+            <div class="flex justify-between items-center text-slate-400 border-b border-slate-800 pb-2">
+              <span class="font-bold uppercase tracking-wider text-sky-400 font-sans">5-Year Horizon</span>
+              <span class="text-[10px]">1 Refresh Cycle</span>
+            </div>
+            <div class="space-y-1.5 text-[11px]">
+              <div class="flex justify-between text-slate-400">
+                <span>Claude 3.5 Cloud:</span>
+                <span class="font-bold text-rose-400 curr-val" data-usd="710000">$710,000</span>
+              </div>
+              <div class="flex justify-between text-slate-400">
+                <span>OpenAI GPT-4o:</span>
+                <span class="font-bold text-amber-400 curr-val" data-usd="543000">$543,000</span>
+              </div>
+              <div class="flex justify-between text-slate-400">
+                <span>Commercial SaaS:</span>
+                <span class="font-bold text-orange-400 curr-val" data-usd="450000">$450,000</span>
+              </div>
+              <div class="flex justify-between text-slate-200 border-t border-slate-800 pt-1.5">
+                <span class="font-bold text-emerald-400">On-Prem ATP Rig:</span>
+                <span class="font-bold text-emerald-400 curr-val" data-usd="29850">$29,850</span>
+              </div>
+              <div class="text-[10px] text-slate-500">(Includes Gen-Next Server Upgrade)</div>
+            </div>
+            <div class="pt-2 border-t border-slate-800 text-right font-bold text-emerald-400 text-xs">
+              Net Savings: <span class="curr-val" data-usd="680150">+$680,150</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 9: HARDWARE PROFILES -->
+      <section id="hardware-architectures" class="space-y-6">
+        <div>
+          <h3 class="text-xl font-bold text-white flex items-center gap-2.5">
+            <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">09</span>
+            Hardware Implementation Profiles: Developer Laptop vs. Centralized Server Rig
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Select the operational deployment model matched to your team headcount and CI/CD concurrency requirements.</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6 text-xs">
+          <!-- Option A: Budget Laptop -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300">Profile A: Standalone Edge</span>
+                <h4 class="text-base font-bold text-white mt-1">Budget Developer Laptop ($750 / ₹65k)</h4>
+              </div>
+              <span class="font-mono text-emerald-400 font-bold text-sm">1 Squad</span>
+            </div>
+
+            <p class="text-slate-300 leading-relaxed">
+              Equipped with an <strong>NVIDIA GeForce RTX 3050 4GB GPU</strong> and 16GB RAM. Employs ATP's dynamic VRAM Auto-Scaler to pin 100% of weights in CUDA memory without PCIe bus offloading.
+            </p>
+
+            <div class="space-y-1.5 font-mono text-[11px]">
+              <div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-400">Target Model:</span><span class="text-white">DeepSeek-R1-1.5B / Qwen2.5:1.5B</span></div>
+              <div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-400">VRAM Footprint:</span><span class="text-white">1.35 GB (100% GPU CUDA)</span></div>
+              <div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-400">Inference Velocity:</span><span class="text-emerald-400 font-bold">88.1 tokens / second</span></div>
+              <div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-400">Context Window:</span><span class="text-white">4,096 to 8,192 tokens</span></div>
+              <div class="flex justify-between py-1"><span class="text-slate-400">Target Concurrency:</span><span class="text-white">1 Active Test Pipeline</span></div>
+            </div>
+          </div>
+
+          <!-- Option B: Dual RTX 4090 Workstation -->
+          <div class="p-5 rounded-xl bg-sky-950/20 border-2 border-sky-500/60 space-y-4 relative">
+            <div class="absolute top-3 right-3 text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-sky-500 text-white font-bold">Recommended</div>
+            <div>
+              <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800">Profile B: Central Private Cloud</span>
+              <h4 class="text-base font-bold text-white mt-1">Dual NVIDIA RTX 4090 Server ($8,500 / ₹8.95L)</h4>
+            </div>
+
+            <p class="text-slate-300 leading-relaxed">
+              Centralized on-premise compute hosting <strong>48GB VRAM</strong> across dual RTX 4090s with AMD Threadripper. Runs high-concurrency <strong>vLLM continuous batching</strong> to serve entire engineering divisions.
+            </p>
+
+            <div class="space-y-1.5 font-mono text-[11px]">
+              <div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-400">Target Model:</span><span class="text-sky-300 font-bold">Qwen2.5-Coder-32B / DeepSeek-32B</span></div>
+              <div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-400">VRAM Footprint:</span><span class="text-white">34.0 GB (Tensor Parallelism = 2)</span></div>
+              <div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-400">Inference Velocity:</span><span class="text-emerald-400 font-bold">58–65 tok/s (on 32B model)</span></div>
+              <div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-400">Context Window:</span><span class="text-white">32,768 tokens (Ingests full DOM)</span></div>
+              <div class="flex justify-between py-1"><span class="text-slate-400">Target Concurrency:</span><span class="text-sky-400 font-bold">16 Concurrent CI/CD Streams</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 10: MULTI-DISCIPLINE CODE GALLERY -->
+      <section id="code-gallery" class="glass-panel rounded-2xl p-6 sm:p-8 border border-slate-800 space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h3 class="text-xl font-bold text-white flex items-center gap-2.5">
+              <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">10</span>
+              Multi-Discipline Code Gallery: Production-Grade Generated Test Suites
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Autonomous output produced by ATP with complete docstrings, BDD structure, and Allure reporting tags.</p>
+          </div>
+        </div>
+
+        <!-- Discipline Tabs -->
+        <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+          <button onclick="showCodeTab('ui')" id="tab-btn-ui" class="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all bg-sky-600 text-white">
+            1. UI E2E (POM Pytest)
+          </button>
+          <button onclick="showCodeTab('api')" id="tab-btn-api" class="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all text-slate-400 hover:text-white bg-slate-900">
+            2. API BVA (REST Matrix)
+          </button>
+          <button onclick="showCodeTab('k6')" id="tab-btn-k6" class="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all text-slate-400 hover:text-white bg-slate-900">
+            3. Load Test (k6 SLA)
+          </button>
+          <button onclick="showCodeTab('bdd')" id="tab-btn-bdd" class="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all text-slate-400 hover:text-white bg-slate-900">
+            4. Acceptance BDD (Robot)
+          </button>
+          <button onclick="showCodeTab('pabot')" id="tab-btn-pabot" class="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all text-slate-400 hover:text-white bg-slate-900">
+            5. Pabot Parallel Log
+          </button>
+        </div>
+
+        <!-- Code Viewers -->
+        <div class="relative">
+          <!-- UI CODE -->
+          <div id="code-tab-ui" class="block">
+            <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># artifacts/scripts/test_ui_checkout.py</span>
+<span class="text-sky-400">import</span> pytest, allure, time
+<span class="text-sky-400">from</span> selenium <span class="text-sky-400">import</span> webdriver
+<span class="text-sky-400">from</span> selenium.webdriver.common.by <span class="text-sky-400">import</span> By
+<span class="text-sky-400">from</span> selenium.webdriver.support.ui <span class="text-sky-400">import</span> WebDriverWait
+<span class="text-sky-400">from</span> selenium.webdriver.support <span class="text-sky-400">import</span> expected_conditions <span class="text-sky-400">as</span> EC
+
+<span class="text-purple-400">@allure.epic</span>(<span class="text-emerald-300">"Commerce Checkout Journey"</span>)
+<span class="text-purple-400">@allure.story</span>(<span class="text-emerald-300">"TC-UI-08: Promo Code Discount & Grand Total Verification"</span>)
+<span class="text-purple-400">@allure.severity</span>(allure.severity_level.CRITICAL)
+<span class="text-sky-400">def</span> <span class="text-yellow-300">test_coupon_application_and_hydration_sla</span>():
+    <span class="text-slate-500">"""[ASPICE Trace: REQ-SYS-COMM-014] Asserts coupon entry recalculates subtotal within SLA."""</span>
+    driver = webdriver.Chrome()
+    wait = WebDriverWait(driver, 10)
+    <span class="text-sky-400">try</span>:
+        <span class="text-sky-400">with</span> allure.step(<span class="text-emerald-300">"Given: Authenticated user loads checkout page"</span>):
+            driver.get(<span class="text-emerald-300">"http://staging-shop:8080/checkout"</span>)
+            wait.until(<span class="text-sky-400">lambda</span> d: d.execute_script(<span class="text-emerald-300">"return document.readyState"</span>) == <span class="text-emerald-300">"complete"</span>)
+            
+        <span class="text-sky-400">with</span> allure.step(<span class="text-emerald-300">"When: User submits 20% discount coupon SPRING20"</span>):
+            promo_box = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, <span class="text-emerald-300">"input[name='promo_code'], #promo"</span>)))
+            promo_box.send_keys(<span class="text-emerald-300">"SPRING20"</span>)
+            driver.find_element(By.CSS_SELECTOR, <span class="text-emerald-300">"button[data-testid='btn-apply']"</span>).click()
+
+        <span class="text-sky-400">with</span> allure.step(<span class="text-emerald-300">"Then: Order total reflects exact 20% deduction"</span>):
+            total_badge = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, <span class="text-emerald-300">"[data-testid='order-total']"</span>)))
+            <span class="text-sky-400">assert</span> total_badge.text == <span class="text-emerald-300">"$80.00"</span>, <span class="text-emerald-300">f"Unexpected total: {total_badge.text}"</span>
+    <span class="text-sky-400">finally</span>:
+        driver.quit()</code></pre>
+          </div>
+
+          <!-- API CODE -->
+          <div id="code-tab-api" class="hidden">
+            <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># artifacts/scripts/test_api_bva.py</span>
+<span class="text-sky-400">import</span> pytest, requests, allure
+
+BASE_URL = <span class="text-emerald-300">"http://staging-shop:8080/api/v1"</span>
+
+<span class="text-purple-400">@pytest.mark.parametrize</span>(<span class="text-emerald-300">"test_id,payload,expected_status,expected_err"</span>, [
+    (<span class="text-emerald-300">"BVA-01"</span>, {<span class="text-emerald-300">"code"</span>: <span class="text-emerald-300">"SPRING20"</span>, <span class="text-emerald-300">"cart_id"</span>: 101}, 200, <span class="text-sky-400">None</span>),
+    (<span class="text-emerald-300">"BVA-02"</span>, {<span class="text-emerald-300">"code"</span>: <span class="text-emerald-300">""</span>, <span class="text-emerald-300">"cart_id"</span>: 101}, 400, <span class="text-emerald-300">"Coupon code cannot be empty"</span>),
+    (<span class="text-emerald-300">"BVA-03"</span>, {<span class="text-emerald-300">"code"</span>: <span class="text-emerald-300">"' OR '1'='1' --"</span>, <span class="text-emerald-300">"cart_id"</span>: 101}, 400, <span class="text-emerald-300">"Invalid characters"</span>),
+    (<span class="text-emerald-300">"BVA-04"</span>, {<span class="text-emerald-300">"code"</span>: <span class="text-emerald-300">"A"</span> * 512, <span class="text-emerald-300">"cart_id"</span>: 101}, 422, <span class="text-emerald-300">"Input exceeds max length"</span>),
+])
+<span class="text-sky-400">def</span> <span class="text-yellow-300">test_coupon_boundary_matrix</span>(test_id, payload, expected_status, expected_err):
+    <span class="text-slate-500">"""[ASPICE Trace: REQ-SWE4-API-09] Verifies Boundary Value Analysis and SQL Injection defenses."""</span>
+    resp = requests.post(<span class="text-emerald-300">f"{BASE_URL}/cart/apply-discount"</span>, json=payload, timeout=5)
+    <span class="text-sky-400">assert</span> resp.status_code == expected_status
+    <span class="text-sky-400">if</span> expected_err:
+        <span class="text-sky-400">assert</span> expected_err.lower() <span class="text-sky-400">in</span> resp.text.lower()</code></pre>
+          </div>
+
+          <!-- K6 CODE -->
+          <div id="code-tab-k6" class="hidden">
+            <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed"><code><span class="text-slate-500">// artifacts/scripts/load_test.js</span>
+<span class="text-sky-400">import</span> http <span class="text-sky-400">from</span> <span class="text-emerald-300">'k6/http'</span>;
+<span class="text-sky-400">import</span> { check, sleep } <span class="text-sky-400">from</span> <span class="text-emerald-300">'k6'</span>;
+
+<span class="text-sky-400">export const</span> options = {
+  stages: [
+    { duration: <span class="text-emerald-300">'15s'</span>, target: 20 },  <span class="text-slate-500">// Ramp to 20 virtual users</span>
+    { duration: <span class="text-emerald-300">'45s'</span>, target: 80 },  <span class="text-slate-500">// Stress surge to 80 concurrent users</span>
+    { duration: <span class="text-emerald-300">'15s'</span>, target: 0 },   <span class="text-slate-500">// Graceful cooldown</span>
+  ],
+  thresholds: {
+    <span class="text-emerald-300">'http_req_duration'</span>: [<span class="text-emerald-300">'p(95)&lt;350'</span>], <span class="text-slate-500">// 95% of calls respond under 350ms</span>
+    <span class="text-emerald-300">'http_req_failed'</span>: [<span class="text-emerald-300">'rate&lt;0.01'</span>],    <span class="text-slate-500">// HTTP failure rate under 1%</span>
+  },
+};
+
+<span class="text-sky-400">export default function</span> () {
+  <span class="text-sky-400">const</span> res = http.get(<span class="text-emerald-300">'http://staging-shop:8080/api/v1/inventory/status?sku=PROD-812'</span>);
+  check(res, {
+    <span class="text-emerald-300">'Status is 200'</span>: (r) =&gt; r.status === 200,
+    <span class="text-emerald-300">'Latency SLA Pass'</span>: (r) =&gt; r.timings.duration &lt; 350,
+  });
+  sleep(0.5);
+}</code></pre>
+          </div>
+
+          <!-- BDD CODE -->
+          <div id="code-tab-bdd" class="hidden">
+            <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># aspice_qa_framework/execution_suite.robot</span>
+*** Settings ***
+Documentation     Enterprise ASPICE SWE.4 Acceptance Suite for User Checkout
+Library           keywords_lib.SUTKeywords    WITH NAME    SUT
+
+*** Test Cases ***
+Scenario: TC-ROBOT-01 Expired Promo Code Boundary Handling
+    [Documentation]    Verifies that applying an expired coupon code shows an inline warning.
+    [Tags]             ASPICE-SWE4    Trace-REQ-CHECKOUT-009    CRITICAL
+    Given Public Shopper Navigates To Checkout Page
+    When User Submits Expired Coupon Code "WINTER2021"
+    Then Application Must Display Inline Error "Coupon has expired"
+    And Order Total Must Remain At "$100.00"
+    And Capture Verification Screenshot    expired_coupon_verified</code></pre>
+          </div>
+
+          <!-- PABOT LOGS -->
+          <div id="code-tab-pabot" class="hidden">
+            <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto leading-relaxed"><code>==============================================================================
+[PABOT] Master Parallel Test Cluster Initialized | Concurrency: 4 Workers
+==============================================================================
+2026-09-06 14:10:01 [PID:14210] [0] EXECUTING Auto Suite.TC-UI-01: Landing Reachability & Brand Logo
+2026-09-06 14:10:01 [PID:14211] [1] EXECUTING Auto Suite.TC-API-01: Health Endpoint Latency Check
+2026-09-06 14:10:01 [PID:14212] [2] EXECUTING Auto Suite.TC-SEC-01: SQL Injection Defense Validation
+2026-09-06 14:10:01 [PID:14213] [3] EXECUTING Auto Suite.TC-UI-02: Form Boundary Value Entry
+
+2026-09-06 14:10:04 [PID:14211] [1] PASSED Auto Suite.TC-API-01 in 2.8 seconds
+2026-09-06 14:10:06 [PID:14210] [0] PASSED Auto Suite.TC-UI-01 in 5.1 seconds
+2026-09-06 14:10:07 [PID:14212] [2] PASSED Auto Suite.TC-SEC-01 in 6.2 seconds
+2026-09-06 14:10:09 [PID:14213] [3] PASSED Auto Suite.TC-UI-02 in 8.3 seconds
+==============================================================================
+PABOT RUN SUMMARY: 10 tests, 10 passed, 0 failed.
+Wall-Clock Acceleration: 1.68x faster than serial execution.
+Artifact: artifacts/reports/pabot_results/log.html generated.
+==============================================================================</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 11: AST SELF-HEALING DEMO -->
+      <section id="self-healing-demo" class="glass-panel rounded-2xl p-6 sm:p-8 border border-slate-800 space-y-6">
+        <div>
+          <h3 class="text-xl font-bold text-white flex items-center gap-2.5">
+            <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">11</span>
+            Stage 5: Autonomous AST Static Validation & Dynamic Selector Self-Healing
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">How ATP eliminates the 35% SDET maintenance burden through in-flight syntax verification and locator patching.</p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-4 text-xs font-mono">
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="text-rose-400 font-bold flex items-center gap-1.5">
+              <span>1. Runtime Locator Break</span>
+            </div>
+            <p class="text-slate-400 text-[11px] font-sans">
+              App frontend changes ID from <code class="text-sky-300 font-mono">#promo-input</code> to <code class="text-sky-300 font-mono">#txt-discount-v2</code>. Dry run throws <code class="text-rose-300 font-mono">NoSuchElementException</code>.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="text-amber-400 font-bold flex items-center gap-1.5">
+              <span>2. AST Heuristic Repair</span>
+            </div>
+            <p class="text-slate-400 text-[11px] font-sans">
+              Stage 5 intercepts error stack trace, inspects live DOM parent container, and prompts local model to synthesize resilient <code class="text-amber-300 font-mono">aria-label</code> and text locators.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="text-emerald-400 font-bold flex items-center gap-1.5">
+              <span>3. In-Place Self-Healing</span>
+            </div>
+            <p class="text-slate-400 text-[11px] font-sans">
+              Code passes <code class="text-emerald-300 font-mono">ast.parse()</code> static check, test passes on retry, and Python script on disk is patched in-place. Zero human tickets created.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 12: DECISION FRAMEWORK & SIGN-OFF -->
+      <section id="decision-framework" class="glass-panel rounded-2xl p-6 sm:p-8 border border-sky-900/60 space-y-6">
+        <div class="space-y-2">
+          <h3 class="text-xl font-bold text-white flex items-center gap-2.5">
+            <span class="flex h-7 w-7 rounded bg-sky-950 text-sky-400 items-center justify-center font-mono text-sm border border-sky-800">12</span>
+            Project Manager Decision Matrix & Recommended Action Plan
+          </h3>
+          <p class="text-xs text-slate-300">Objective criteria for selecting the appropriate deployment strategy:</p>
+        </div>
+
+        <div class="grid sm:grid-cols-3 gap-4 text-xs font-mono">
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="font-bold text-slate-300 font-sans">Option 1: Single Squad Pilot</div>
+            <div class="text-emerald-400 font-bold text-sm">$750 / ₹65k CapEx</div>
+            <p class="text-[11px] text-slate-400 font-sans leading-relaxed">
+              Deploy on an existing developer laptop (RTX 3050 4GB). Proves zero-egress data sovereignty and AST healing on 1 target microservice.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-sky-950/40 border-2 border-sky-500/80 space-y-2">
+            <div class="font-bold text-sky-300 font-sans">Option 2: Department Server (Rec.)</div>
+            <div class="text-sky-300 font-bold text-sm">$8,500 / ₹8.95L CapEx</div>
+            <p class="text-[11px] text-slate-300 font-sans leading-relaxed">
+              Procure a Dual RTX 4090 Workstation running vLLM. Serves 5–8 squads simultaneously, saving over <strong>$175,000 / ₹1.85 Cr in Year 1</strong>.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="font-bold text-slate-300 font-sans">Option 3: Enterprise Rack Server</div>
+            <div class="text-purple-400 font-bold text-sm">$13,800 / ₹14.5L CapEx</div>
+            <p class="text-[11px] text-slate-400 font-sans leading-relaxed">
+              Deploy a dedicated 2U rack server with NVIDIA RTX 6000 Ada (48GB ECC). Serves 15+ squads with enterprise IPMI management.
+            </p>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div class="text-xs text-slate-400">
+            <strong>Recommended Action:</strong> Authorize a 14-day technical proof-of-concept for the Tier 2 Dual RTX 4090 architecture.
+          </div>
+          <button onclick="window.print()" class="px-5 py-2.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow-lg transition-all flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+            Export Proposal to PDF
+          </button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- JAVASCRIPT CONTROLLERS -->
+  <script>
+    // Currency State
+    let currentCurrency = 'USD';
+    const FX_LANDED_INR = 105.70; // 87.0 USD-INR + 18% GST + 3.5% Forex
+
+    function setCurrency(curr) {
+      currentCurrency = curr;
+      const btnUsd = document.getElementById('curr-usd');
+      const btnInr = document.getElementById('curr-inr');
+
+      if (curr === 'USD') {
+        btnUsd.className = 'px-3 py-1 rounded text-xs font-semibold transition-all bg-sky-600 text-white shadow';
+        btnInr.className = 'px-3 py-1 rounded text-xs font-semibold transition-all text-slate-400 hover:text-white';
+      } else {
+        btnInr.className = 'px-3 py-1 rounded text-xs font-semibold transition-all bg-sky-600 text-white shadow';
+        btnUsd.className = 'px-3 py-1 rounded text-xs font-semibold transition-all text-slate-400 hover:text-white';
+      }
+
+      // Update static table cells
+      document.querySelectorAll('.curr-val').forEach(el => {
+        const valUSD = parseFloat(el.getAttribute('data-usd'));
+        if (isNaN(valUSD)) return;
+
+        if (curr === 'USD') {
+          if (valUSD === 0) el.textContent = '$0.00';
+          else if (valUSD < 1) el.textContent = '$' + valUSD.toFixed(3);
+          else el.textContent = '$' + valUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        } else {
+          const valINR = valUSD * FX_LANDED_INR;
+          if (valINR === 0) el.textContent = '₹0.00';
+          else if (valINR >= 10000000) el.textContent = '₹' + (valINR / 10000000).toFixed(2) + ' Cr';
+          else if (valINR >= 100000) el.textContent = '₹' + (valINR / 100000).toFixed(2) + ' L';
+          else el.textContent = '₹' + Math.round(valINR).toLocaleString('en-IN');
+        }
+      });
+
+      recalcROI();
+    }
+
+    // Dynamic ROI & TCO Engine
+    function recalcROI() {
+      const squads = parseInt(document.getElementById('calc-squads').value);
+      const runsPerSquad = parseInt(document.getElementById('calc-runs').value);
+      const hwChoice = document.getElementById('calc-hardware').value;
+
+      document.getElementById('calc-squads-val').textContent = squads + (squads === 1 ? ' Squad' : ' Squads');
+      document.getElementById('calc-runs-val').textContent = runsPerSquad.toLocaleString() + ' Runs';
+
+      const totalRuns = squads * runsPerSquad;
+      document.getElementById('out-total-runs').textContent = totalRuns.toLocaleString();
+
+      // Per-run cloud costs
+      const claudeRunCost = 2.075;
+      const gptRunCost = 1.588;
+      const saasMonthlyPerSquad = 1500;
+
+      const monthlyClaude = totalRuns * claudeRunCost;
+      const monthlyGPT = totalRuns * gptRunCost;
+      const monthlySaaS = squads * saasMonthlyPerSquad;
+
+      // Hardware CapEx mapping
+      let hardwareCapExUSD = 8500;
+      let hwName = "Dual RTX 4090 Server";
+      if (hwChoice === 'laptop') { hardwareCapExUSD = 750; hwName = "Dev Laptop (RTX 3050)"; }
+      else if (hwChoice === 'single4090') { hardwareCapExUSD = 3600; hwName = "Single RTX 4090 Rig"; }
+      else if (hwChoice === 'dual4090') { hardwareCapExUSD = 8500; hwName = "Dual RTX 4090 Server"; }
+      else if (hwChoice === 'ada6000') { hardwareCapExUSD = 13800; hwName = "RTX 6000 Ada Rack Server"; }
+
+      // Payback calculation against Claude API
+      const dailyClaudeSavings = (monthlyClaude / 30);
+      const paybackDays = dailyClaudeSavings > 0 ? (hardwareCapExUSD / dailyClaudeSavings).toFixed(1) : "0";
+
+      // 3-Year Net Savings vs Claude
+      const threeYearCloudClaude = monthlyClaude * 36;
+      const threeYearLocalTCO = hardwareCapExUSD + (2470 * 3); // CapEx + 3 years DevOps/Power OpEx
+      const threeYearSavings = threeYearCloudClaude - threeYearLocalTCO;
+
+      // Formatting
+      function fmt(valUSD) {
+        if (currentCurrency === 'USD') {
+          return '$' + Math.round(valUSD).toLocaleString('en-US');
+        } else {
+          const valINR = valUSD * FX_LANDED_INR;
+          if (valINR >= 10000000) return '₹' + (valINR / 10000000).toFixed(2) + ' Cr';
+          if (valINR >= 100000) return '₹' + (valINR / 100000).toFixed(2) + ' L';
+          return '₹' + Math.round(valINR).toLocaleString('en-IN');
+        }
+      }
+
+      document.getElementById('out-claude-cost').textContent = fmt(monthlyClaude) + ' / mo';
+      document.getElementById('out-gpt-cost').textContent = fmt(monthlyGPT) + ' / mo';
+      document.getElementById('out-saas-cost').textContent = fmt(monthlySaaS) + ' / mo';
+      document.getElementById('out-hardware-capex').textContent = fmt(hardwareCapExUSD) + ' (One-Time)';
+      document.getElementById('out-payback-days').textContent = paybackDays + ' Operating Days';
+      document.getElementById('out-payback-desc').textContent = 
+        `The ${hwName} is 100% paid off in ${paybackDays} operating days compared to public Claude Sonnet API invoices.`;
+      document.getElementById('out-3yr-savings').textContent = (threeYearSavings >= 0 ? '+' : '') + fmt(threeYearSavings);
+    }
+
+    // Code Tab Controller
+    function showCodeTab(tab) {
+      ['ui', 'api', 'k6', 'bdd', 'pabot'].forEach(t => {
+        const el = document.getElementById('code-tab-' + t);
+        const btn = document.getElementById('tab-btn-' + t);
+        if (t === tab) {
+          el.classList.remove('hidden');
+          el.classList.add('block');
+          btn.className = 'px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all bg-sky-600 text-white';
+        } else {
+          el.classList.remove('block');
+          el.classList.add('hidden');
+          btn.className = 'px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all text-slate-400 hover:text-white bg-slate-900';
+        }
+      });
+    }
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', () => {
+      setCurrency('USD');
+      recalcROI();
+    });
+  </script>
+</body>
+</html>
