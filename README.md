@@ -27,6 +27,9 @@
 7. [🔄 End-to-End Application & Inference Sequence UML](#-end-to-end-application--inference-sequence-uml)
 8. [🧹 Multi-Stage Sanitization, RAG Context Injection & Re-Sanitization Pipeline](#-multi-stage-sanitization-rag-context-injection--re-sanitization-pipeline)
 9. [🧪 Integrated Test Disciplines](#-integrated-test-disciplines)
+   * [🧠 Epistemic Test Coverage Matrix (ECM) & Semantic Domain Understanding Framework](#-epistemic-test-coverage-matrix-ecm--semantic-domain-understanding-framework)
+   * [🧹 Automated Multi-Selector Overlay Dismissal & Universal Cookie Acceptance](#-automated-multi-selector-overlay-dismissal--universal-cookie-acceptance)
+   * [🛡️ Pre/Post-Run Vector DB Storage Isolation & Cleanup Engine](#-prepost-run-vector-db-storage-isolation--cleanup-engine)
    * [🌐 Enterprise Multi-Vector API Discovery Engine (`api_crawler.py`)](#-enterprise-multi-vector-api-discovery-engine-api_crawlerpy)
    * [👁️ Multi-Library Smart DOM Crawling & Visual WCAG 1.1.1 Accessibility Audit](#-multi-library-smart-dom-crawling--visual-wcag-111-accessibility-audit)
    * [📑 Enhanced 3-Pillar Master Requirements Document (BRD, PRD, FRD)](#-enhanced-3-pillar-master-requirements-document-brd-prd-frd)
@@ -358,6 +361,16 @@ The framework provides an enterprise-grade directory structure that unifies **Ro
 ├── deploy_enterprise_qa.py             # Single-source Master Deployment & Synchronization Orchestrator
 ├── docker-compose-windows.yml          # Container orchestration with GPU passthrough
 ├── artifacts/                          # Air-gapped runtime artifacts & generated code
+│   ├── cookies/                        # Authenticated session cookies & browser fingerprints
+│   │   ├── session_metadata.json       # User-Agent cryptographic binding & cookie consent record
+│   │   ├── cf_session.json             # JSON array of active cookies (cf_clearance, tokens)
+│   │   └── storageState.json           # Playwright storageState formatted session state
+│   ├── crawl/                          # Crawler outputs & overlay context
+│   │   ├── overlay_context.json        # Detected & dismissed consent overlays and interstitials
+│   │   └── xhr_requests.json           # Network requests captured via CDP performance logging
+│   ├── vectors/                        # Isolated vector element embeddings
+│   │   ├── dom_vector_index.json       # In-memory KD/ANN vector search index
+│   │   └── dom_vector_store.json       # Element bounding box coordinates and selectors
 │   ├── scripts/                        # Synthesized multi-discipline test scripts
 │   │   ├── auto_ui_test.py             # Resilient Selenium 4 Page Object Model suite
 │   │   ├── auto_api_test.py            # Pytest REST Boundary Value Analysis suite
@@ -368,14 +381,18 @@ The framework provides an enterprise-grade directory structure that unifies **Ro
 │   │   └── auto_ui_playwright.spec.ts  # Playwright TypeScript test suite
 │   ├── reports/                        # Synthesized requirements & verification documents
 │   │   ├── master_requirements_document.md # 3-Pillar BRD, PRD, and FRD with ASPICE RTM
+│   │   ├── coverage_matrix.json        # Epistemic Coverage Matrix & domain model schema
+│   │   ├── coverage_matrix.md          # Human-readable ECM report & ASPICE audit trail
 │   │   └── allure/                     # Compiled interactive Allure HTML report
 │   └── discovered_apis.json            # Dynamic backend APIs discovered via CDP performance logs
 └── aspice_qa_framework/                # Core backend orchestrator source code
     ├── main.py                         # FastAPI REST Gateway, WebSocket & Telemetry broadcaster
     ├── engines/                        # AI & Testing Subsystems
     │   ├── ai_core_engine.py           # Multi-discipline SDET prompt orchestrator & synthesizer
+    │   ├── modern_ui_engine.py         # Multi-selector collapse, cookie consent auto-accept & interstitials
+    │   ├── vector_dom_engine.py        # Spatial element extraction, KD/ANN vector store & storage cleanup
+    │   ├── coverage_engine.py          # Epistemic Coverage Matrix (ECM) & 5-discipline heatmap engine
     │   ├── api_crawler.py              # 5-Vector active/passive backend reconnaissance engine
-    │   ├── coverage_engine.py          # AST-based 5-discipline coverage heatmap engine
     │   ├── hardware_probe.py           # GPU VRAM governor & 3-profile live benchmarking
     │   ├── enhanced_mcp_harness.py     # Streaming Ollama transport with repetition loop breaker
     │   ├── langchain_engine.py         # Semantic RAG chunker & vector index constructor
@@ -388,16 +405,19 @@ The framework provides an enterprise-grade directory structure that unifies **Ro
 ```mermaid
 graph TD
     subgraph Presentation ["Presentation & Interaction Layer"]
-        UI["React 18 Dashboard<br/>(Monaco Editor, Scope Gate Modal, SSE Logs)"]
+        UI["React 18 Dashboard<br/>(Monaco Editor, Scope Gate Modal, Epistemic Matrix View, Cookie Manager)"]
     end
 
     subgraph Gateway ["API & Orchestration Layer"]
-        FASTAPI["FastAPI Gateway (Port 8000)<br/>State Machines, SSE Telemetry & Export Engine"]
+        FASTAPI["FastAPI Gateway (Port 8000)<br/>State Machines, SSE Telemetry, Vector DB Cleanup & Export Engine"]
         WORKER["Celery Distributed Worker<br/>Headless Chromium, Pabot, k6 Runners"]
     end
 
-    subgraph Reasoning ["Local Sovereign Inference Layer"]
+    subgraph Reasoning ["Local Sovereign Inference & Epistemic Reasoning Layer"]
         AI_CORE["AI Core Synthesizer<br/>(Multi-Discipline SDET Prompts)"]
+        COVERAGE["Epistemic Coverage Engine<br/>(Business Invariants, State Machines, Assumptions)"]
+        MODERN_UI["Modern UI Engine<br/>(Multi-Selector Collapse, Cookie Auto-Accept, Turnstile)"]
+        DOM_VECTOR["DOM Vector Engine<br/>(Spatial Element Embeddings, Storage Cleanup)"]
         EVALUATOR["AST Evaluator & Healer<br/>(Syntax Check, Rubric Scoring)"]
         LANGCHAIN["RAG Retriever<br/>(DOM Vector Indices & MRD Injection)"]
         MCP_HARNESS["MCP Transport Harness<br/>(Streaming Buffer, Rep-Breaker)"]
@@ -406,7 +426,7 @@ graph TD
 
     subgraph TestingHarness ["Unified Test Execution Framework"]
         POETRY["Poetry Environment Manager"]
-        ROBOT["Robot Framework 7.0+ & Pabot<br/>(suite_playwright.robot, auto_suite.robot)"]
+        ROBOT["Robot Framework 7.0+ & Pabot<br/>(suite_playwright.robot, auto_suite.robot, keywords_lib.py)"]
         SELENIUM["Selenium 4 Suite<br/>(test_selenium.py, auto_ui_test.py)"]
         PYPPETEER["Pyppeteer Asynchronous Bridge<br/>(PyppeteerKeywords.py)"]
         K6["Grafana k6 Load Runner<br/>(auto_load_test.js)"]
@@ -418,13 +438,14 @@ graph TD
     end
 
     subgraph Storage ["Air-Gapped Artifacts & Storage"]
-        ARTIFACTS["Local Artifacts Volume<br/>(scripts/, reports/, discovered_apis.json)"]
+        ARTIFACTS["Local Artifacts Volume<br/>(scripts/, reports/, cookies/, vectors/, discovered_apis.json)"]
     end
 
     UI -->|Trigger Crawl / Approve Scope / Export| FASTAPI
     FASTAPI -->|SSE Stream Telemetry| UI
     FASTAPI -->|Scan Infrastructure| NIST
     FASTAPI -->|Dispatch Crawl / Execution| WORKER
+    FASTAPI -->|Synthesize Epistemic Model| COVERAGE
     FASTAPI -->|Generate Multi-Suite| AI_CORE
     FASTAPI -->|Evaluate & Self-Heal| EVALUATOR
 
@@ -434,6 +455,8 @@ graph TD
     MCP_HARNESS -->|Inference Query| OLLAMA
     EVALUATOR -->|Static AST Analysis & Review| MCP_HARNESS
 
+    WORKER -->|Inspect & Sanitize DOM via| MODERN_UI
+    WORKER -->|Vectorize Elements via| DOM_VECTOR
     WORKER -->|Execute Tests via| TestingHarness
     TestingHarness -->|Store Test Runs & Reports| ARTIFACTS
 ```
@@ -442,7 +465,11 @@ graph TD
 
 | Component File | Architectural Layer | Primary Responsibilities & Design Patterns |
 | :--- | :--- | :--- |
-| [`main.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/main.py) | **API Gateway & Export** | Hosts all REST and SSE endpoints (`/api/crawl`, `/api/scope_gate/*`, `/api/generate_suite`, `/api/execute`, `/api/chat/ask`, `/api/system/export`, `/api/system/import`). Implements state machines and ultra-fast non-destructive project packaging. |
+| [`main.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/main.py) | **API Gateway & Export** | Hosts all REST and SSE endpoints (`/api/crawl`, `/api/coverage/matrix`, `/api/vector-db/cleanup`, `/api/cookies/inject`, `/api/scope_gate/*`, `/api/generate_suite`, `/api/execute`, `/api/chat/ask`, `/api/system/export`, `/api/system/import`). Implements state machines and ultra-fast non-destructive project packaging. |
+| [`coverage_engine.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/coverage_engine.py) | **Epistemic Coverage & Heatmap** | Synthesizes the Epistemic Domain Model: extracts Actor Personas, JTBD outcomes, Business Invariants (Critical/Major/Minor/Informational), Workflow State-Machine Transitions, and Environmental Assumptions. Computes IPR, STC, AVR, and ECI scores, persisting `coverage_matrix.json` and `coverage_matrix.md`. |
+| [`modern_ui_engine.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/modern_ui_engine.py) | **DOM Sanitation & Overlay Purge** | Collapses open multi-selectors, dropdowns, and language pickers (`collapse_open_selectors_and_menus`). Automatically accepts cookie consent banners on every page (`ensure_cookies_accepted`). Stabilizes dynamic page value hydration (`stabilize_and_hydrate_page`) and neutralizes signup walls, Google OneTap, and login gates (`dismiss_intrusive_interstitials`). |
+| [`vector_dom_engine.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/vector_dom_engine.py) | **Spatial Vector Index & Isolation** | Extracts interactive elements, computes spatial bounding boxes, builds KD/ANN feature vector embeddings. Purges overlays prior to indexing and executes pre/post-run storage cleanup (`clear_storage`, `cleanup_project_storage`) to prevent cross-project locator pollution. |
+| [`keywords_lib.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/keywords_lib.py) | **Keyword Library & Self-Healing** | Low-code Robot Framework keyword harness. Exposes `Ensure Cookies Accepted`, `Dismiss Intrusive Overlays And Menus`, and `Wait For DOM Hydration And Stability`. Integrates runtime click interception recovery. |
 | [`config/settings.py`](file:///c:/Users/Junko/Downloads/RagLLM/config/settings.py) | **Environment Configuration** | Enterprise configuration engine using Pydantic Settings V2 with graceful fallback. Manages base URLs, headless switches, WAF bypass tokens (`X-Automation-Bypass-Token`), and official Cloudflare Turnstile test keys. |
 | [`libraries/PyppeteerKeywords.py`](file:///c:/Users/Junko/Downloads/RagLLM/libraries/PyppeteerKeywords.py) | **Robot/Pyppeteer Bridge** | Custom Robot Framework keyword library wrapping Pyppeteer. Implements non-blocking async execution inside Robot's synchronous runner, CDP header injection, and deterministic element/loader synchronization. |
 | [`tests/suite_playwright.robot`](file:///c:/Users/Junko/Downloads/RagLLM/tests/suite_playwright.robot) | **Browser Acceptance Suite** | Enterprise CI/CD suite for Playwright-backed Browser Library. Demonstrates deterministic WAF header injection, `#app-loader` spinner detachment, and Cloudflare Turnstile token validation. |
@@ -450,10 +477,10 @@ graph TD
 | [`pyproject.toml`](file:///c:/Users/Junko/Downloads/RagLLM/pyproject.toml) | **Dependency Governance** | Poetry environment specification pinning Robot Framework, robotframework-browser, Selenium 4, Pyppeteer, Pytest, Pabot, and Pydantic. |
 | [`pytest.ini`](file:///c:/Users/Junko/Downloads/RagLLM/pytest.ini) | **Pytest Configuration** | Strict test discovery and execution markers (`smoke`, `regression`, `waf_protected`) with automated Allure results targeting. |
 | [`deploy_enterprise_qa.py`](file:///c:/Users/Junko/Downloads/RagLLM/deploy_enterprise_qa.py) | **Master Deployment Engine** | Single master source of truth. Synchronizes, validates, and deploys all configuration, libraries, test scripts, and Docker microservices with atomic consistency. |
-| [`index.html`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/static/index.html) | **Presentation** | Zero-build React 18 frontend. Features Monaco code editor, live SSE execution logs, Scope Gate route selector, Live Benchmark calibrator modal, Coverage Heatmap drawer, and Allure iframe. |
+| [`index.html`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/static/index.html) | **Presentation** | Zero-build React 18 frontend. Features Monaco code editor, live SSE execution logs, Scope Gate route selector, Epistemic Matrix interactive dashboard, Live Benchmark calibrator modal, Coverage Heatmap drawer, and Allure iframe. |
 | [`enhanced_mcp_harness.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/enhanced_mcp_harness.py) | **LLM Transport** | Industrial Ollama client. Features streaming buffer, O(1) circular repetition loop detector (`rep_pattern`), dynamic prefix caching, and infinite context output auto-stitcher. |
 | [`hardware_probe.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/hardware_probe.py) | **Hardware Governor** | Queries `nvidia-smi` and system RAM. Calculates exact VRAM KV-cache requirements, prevents PCIe offloading, executes 3-profile live benchmarks, and persists configuration. |
-| [`ai_core_engine.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/ai_core_engine.py) | **Code Synthesizer** | Multi-discipline SDET prompt orchestrator. Synthesizes executable WebdriverIO, Selenium, Pytest, k6, and Robot Framework test scripts from crawled DOM schemas and MRD pillars. |
+| [`ai_core_engine.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/ai_core_engine.py) | **Code Synthesizer** | Multi-discipline SDET prompt orchestrator. Synthesizes executable WebdriverIO, Selenium, Pytest, k6, and Robot Framework test scripts from crawled DOM schemas, MRD pillars, and grounded overlay/cookie directives. |
 | [`langchain_engine.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/langchain_engine.py) | **RAG Retriever** | Chunks crawled DOM trees and Master Requirements Documents (MRD). Computes local embeddings, builds vector indices, and injects top-k semantic context into prompts. |
 | [`llm_evaluator.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/llm_evaluator.py) | **Quality Gate** | Performs static syntax checking via `ast.parse()`, scores scripts against SDET rubrics, sanitizes `<think>` tags, and orchestrates dynamic locator healing. |
 | [`nist_scanner.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/nist_scanner.py) | **Security Scanner** | Fingerprints target HTTP headers, identifies web technology stacks (PHP, Node, Python, Django), and executes parallel queries to the NIST NVD CVE API. |
@@ -534,6 +561,81 @@ sequenceDiagram
     UI-->>Architect: Displays Interactive Test Dashboard & Metrics
 ```
 
+### Multi-Selector, Cookie Consent & Interstitial Purge Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Crawler as Headless Spider / Worker
+    participant Engine as Modern UI Engine (modern_ui_engine.py)
+    participant DOM as Chromium Page DOM Context
+    participant CookieStore as Session Cookie Store (artifacts/cookies/)
+    participant OverlayCtx as Overlay Context (artifacts/crawl/)
+    participant VectorDB as DOM Vector Engine (vector_dom_engine.py)
+
+    Crawler->>Engine: stabilize_and_hydrate_page(page, timeout=3.0)
+    Engine->>DOM: Await networkidle, active input value hydration & layout settle
+    DOM-->>Engine: DOM Stabilized (Values Hydrated)
+
+    Crawler->>Engine: ensure_cookies_accepted(page)
+    Note over Engine, DOM: Scans OneTrust, Cookiebot, Civic, Osano & Custom Banners
+    Engine->>DOM: Click Accept / Allow All Button
+    DOM-->>Engine: Banner Dismissed & Consent Granted
+    Engine->>CookieStore: Persist Cookies & User-Agent (session_metadata.json)
+
+    Crawler->>Engine: dismiss_intrusive_interstitials(page)
+    Note over Engine, DOM: Suppresses Google OneTap, Login Walls, Signup Interstitials
+    Engine->>DOM: Dismiss Overlays & Force 'overflow: auto !important'
+    DOM-->>Engine: Interstitials Cleared
+
+    Crawler->>Engine: collapse_open_selectors_and_menus(page)
+    Note over Engine, DOM: Locates open language pickers, popovers, select2, aria-expanded='true'
+    Engine->>DOM: Dispatch Escape key & Target Body Safe Coordinates
+    DOM-->>Engine: Selectors Collapsed & Backdrop Removed
+    Engine->>OverlayCtx: Record Dismissed Overlays (overlay_context.json)
+
+    Crawler->>VectorDB: extract_and_index_elements(clean_dom)
+    Note over VectorDB: Vectorizes ONLY genuine interactive elements without overlay occlusion
+```
+
+### Epistemic Coverage Matrix (ECM) Synthesis & Validation Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor SDET as QA Lead / SDET
+    participant UI as React 18 Dashboard
+    participant API as FastAPI Gateway (main.py)
+    participant ECM as Epistemic Coverage Engine (coverage_engine.py)
+    participant Model as Sovereign LLM (Ollama)
+    participant RAG as RAG Retriever & Vector Store
+    participant Artifacts as Artifacts Storage (coverage_matrix.json)
+
+    SDET->>UI: Triggers Epistemic Model Synthesis
+    UI->>API: GET /api/coverage/matrix (or POST /api/scope_gate/approve)
+    API->>ECM: generate_epistemic_model(domain_context, discovered_apis)
+    
+    ECM->>RAG: Retrieve Functional Specs & Crawled DOM Trees
+    RAG-->>ECM: Top-k Relevant Business Rules & Route Schemas
+    
+    ECM->>Model: Prompt Domain Epistemology (Personas, Invariants, State Machines, Assumptions)
+    Model-->>ECM: Structured Epistemic Domain Model JSON
+    
+    Note over ECM: Compute Mathematical Epistemic Metrics:<br/>IPR (Invariant Preservation Ratio)<br/>STC (State Transition Coverage)<br/>AVR (Assumption Validity Rate)<br/>ECI (Epistemic Coverage Index)
+    
+    ECM->>Artifacts: Save artifacts/reports/coverage_matrix.json & coverage_matrix.md
+    ECM-->>API: Epistemic Matrix Telemetry & Metrics
+    API-->>UI: Live Stream ECM Tree, State Machines, Clarification Radar
+    
+    opt Gap Fulfillment
+        SDET->>UI: Clicks "⚡ 1-Click Auto-Fulfill" on State Transition Gap
+        UI->>API: POST /api/coverage/fulfill {entity, discipline}
+        API->>ECM: synthesize_targeted_epistemic_test(...)
+        ECM-->>API: Synthesized Test Script with Business Invariant Assertions
+        API-->>UI: Test Script Appended & ECM Heatmap Re-Calculated
+    end
+```
+
 ---
 
 ## 🧹 Multi-Stage Sanitization, RAG Context Injection & Re-Sanitization Pipeline
@@ -604,6 +706,188 @@ One of the platform's core architectural innovations is its **deterministic sani
 | **Performance Testing**| Grafana k6 Multi-Scenario | Simultaneous peak burst concurrency (20 VUs at same instant), sustained repeated page iterations (5 VUs x 10 cycles), and discovered API throughput assertions (`p95 < 500ms`). |
 | **Acceptance / BDD** | Robot Framework 7.0+ & Pabot | Human-readable Gherkin/BDD keyword syntax, parallel test execution, full lifecycle hooks, and Automotive ASPICE SWE.4 traceability. |
 | **Security / Compliance**| NIST CVE Scanner | Real-time vulnerability lookup, SSL/TLS audit, security header verification, and OWASP Top 10 API boundary fuzzing. |
+
+---
+
+### 🧠 Epistemic Test Coverage Matrix (ECM) & Semantic Domain Understanding Framework
+
+Conventional test coverage tools evaluate purely syntactic and mechanical artifacts: URL routes reached, DOM selectors clicked, HTTP 200 response codes, and standard Boundary Value Analysis (BVA) empty-string inputs. While this accelerates initial pipeline velocity, it creates a dangerous **illusion of safety**: an automated agent can generate hundreds of passing tests for a system while remaining entirely ignorant of core business rules, broken workflow state machines, unstated assumptions, and unmet customer outcomes.
+
+Enterprise ATP introduces the **Epistemic Test Coverage Matrix (ECM)**—a semantic domain understanding framework that operates above code and DOM syntax to formalize, measure, and verify the application's underlying business epistemology.
+
+```text
++---------------------------------------------------------------------------------------------------+
+|                        EPISTEMIC TEST COVERAGE MATRIX (ECM) ARCHITECTURE                          |
++---------------------------------------------------------------------------------------------------+
+| 1. Actor Personas          --> Primary, Secondary & Antagonistic actors with JTBD outcomes         |
+| 2. Business Invariants     --> Critical, Major, Minor & Informational non-negotiable rules        |
+| 3. State Machine Models    --> Valid paths, Forbidden transitions, Guard conditions, Recovery     |
+| 4. Environmental Assump.   --> Upstream APIs, Network lag, Idempotency, Clock drift, Token expiry |
+| 5. Clarification Radar     --> Autonomous ambiguity detection & proactive specification refinement|
++---------------------------------------------------------------------------------------------------+
+```
+
+#### 1. The Five Epistemic Domain Pillars
+
+1. **Actor Personas & Jobs-to-be-Done (JTBD)**:
+   * **Primary Persona (Authorized Power User)**: Focuses on core end-to-end transactional workflows, high-throughput actions, and state persistence.
+   * **Secondary Persona (Casual / Read-Only Guest)**: Focuses on public catalog browsing, content search, and progressive registration.
+   * **Antagonistic Persona (Adversarial Attacker / Concurrent Abuser)**: Executes out-of-order state submissions, race conditions, parameter tampering, and boundary stress to intentionally violate invariants.
+2. **Business Invariants (The Non-Negotiable Contracts)**:
+   * `CRITICAL`: Invariants where violation causes financial loss, unauthorized privilege escalation, or data corruption (e.g., *“An order cannot be finalized with an unverified payment”*, *“Tenant data must remain isolated across sessions”*).
+   * `MAJOR`: Invariants governing transactional and workflow integrity (e.g., *“Cart items cannot have negative quantities”*, *“State cannot transition from Cancelled to Shipped”*).
+   * `MINOR`: Invariants governing interface behavior, pagination consistency, and localized currency rounding.
+   * `INFORMATIONAL`: Telemetry logging, analytical event dispatching, and audit trail generation.
+3. **Workflow State Machine Modeling**:
+   * Synthesizes formal finite state machines (FSM) capturing application lifecycles.
+   * Maps every state $S$, valid transition $T_{valid}$, guard condition $G$, and explicitly specifies **Forbidden Transitions ($T_{forbidden}$)** that the system must reject.
+4. **Environmental & External Assumptions**:
+   * Catalogs implicit external dependencies: third-party payment gateway latency, OAuth token lifetimes, idempotency key uniqueness, database eventual consistency windows, and offline storage synchronization.
+5. **Clarification Radar (Active Ambiguity Discovery)**:
+   * The ECM engine continuously analyzes specification gaps. When business rules are vague or contradictory (e.g., *“What occurs when an authenticated user's session expires mid-checkout?”*), the engine populates the **Clarification Radar**, formulating precise EARS-compliant questions to eliminate ambiguity before test synthesis.
+
+#### 2. Mathematical Epistemic Coverage Formulations
+
+The ECM engine computes four deterministic mathematical metrics to score test estate epistemic fidelity:
+
+1. **Invariant Preservation Ratio ($IPR$)**:
+   Measures the weighted verification of all declared business invariants across test disciplines:
+   $$\text{IPR} = \frac{\sum_{i \in I} w_i \cdot V_i}{\sum_{i \in I} w_i} \times 100\%$$
+   Where $w_{Critical} = 4$, $w_{Major} = 3$, $w_{Minor} = 2$, $w_{Info} = 1$, and $V_i \in \{0, 1\}$ indicates whether invariant $i$ has an active, passing assertion.
+
+2. **State Transition Coverage ($STC$)**:
+   Measures the percentage of valid lifecycle transitions actively traversed by test cases:
+   $$\text{STC} = \frac{|T_{\text{exercised}} \cap T_{\text{valid}}|}{|T_{\text{valid}}|} \times 100\%$$
+
+3. **Forbidden Transition Rejection Rate ($FTR$)**:
+   Measures whether negative test cases explicitly attempt and verify the rejection of illegal state transitions:
+   $$\text{FTR} = \frac{|T_{\text{rejected}} \cap T_{\text{forbidden}}|}{|T_{\text{forbidden}}|} \times 100\%$$
+
+4. **Assumption Validity Rate ($AVR$)**:
+   Measures the proportion of external environmental assumptions explicitly validated under simulated failure or boundary conditions:
+   $$\text{AVR} = \frac{|A_{\text{tested}}|}{|A_{\text{total}}|} \times 100\%$$
+
+5. **Composite Epistemic Coverage Index ($ECI$)**:
+   Combines all four dimensions into an executive metric reflecting true domain testing maturity:
+   $$\text{ECI} = 0.40 \cdot \text{IPR} + 0.30 \cdot \text{STC} + 0.15 \cdot \text{FTR} + 0.15 \cdot \text{AVR}$$
+
+#### 3. Formal State Machine Transition Model (Mermaid Diagram)
+
+```mermaid
+stateDiagram-v2
+    [*] --> AnonymousGuest: Landing Page Visit
+    
+    AnonymousGuest --> Authenticating: Submit Credentials
+    Authenticating --> ActiveSession: 200 OK & JWT Granted
+    Authenticating --> AnonymousGuest: 401 Unauthorized / Invalid
+    
+    ActiveSession --> BrowsingCatalog: Search / Select Products
+    BrowsingCatalog --> CartPopulated: Add Item to Cart (Qty >= 1)
+    
+    CartPopulated --> CheckoutInitiated: Click Checkout [Cart Non-Empty]
+    CartPopulated --> CartPopulated: Update Qty / Remove Item
+    
+    CheckoutInitiated --> PaymentPending: Submit Shipping Details
+    PaymentPending --> OrderCompleted: Payment Success (200)
+    PaymentPending --> PaymentFailed: Payment Declined (402)
+    
+    PaymentFailed --> PaymentPending: Retry Different Card
+    PaymentFailed --> CartPopulated: Return to Cart
+    
+    OrderCompleted --> [*]: Order Archived
+    
+    %% Forbidden Transitions explicitly verified by ECM Negative Suites
+    state "FORBIDDEN TRANSITIONS (Rejected with 400/403/422)" as Forbidden {
+        AnonymousGuest --> CheckoutInitiated: Bypass Authentication
+        CartPopulated --> OrderCompleted: Skip Payment Gateway
+        OrderCompleted --> PaymentPending: Re-charge Finalized Order
+    }
+```
+
+*All epistemic models, invariants, state transitions, and radar discoveries are persisted to `artifacts/reports/coverage_matrix.json` and rendered interactively in the Web Dashboard.*
+
+---
+
+### 🧹 Automated Multi-Selector Overlay Dismissal & Universal Cookie Acceptance
+
+A common failure mode in enterprise web scraping, headless spidering, and automated UI test execution is **overlay occlusion**. Modern websites render complex multi-selectors, sticky language pickers, modal backdrops, and third-party Consent Management Platforms (CMPs) that hijack mouse pointer events, leading to `ElementClickInterceptedException` and corrupted vector representations.
+
+ATP's [`modern_ui_engine.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/modern_ui_engine.py) provides deterministic, multi-layered overlay neutralization:
+
+```text
++---------------------------------------------------------------------------------------------------+
+|                     MODERN UI SANITIZATION & OVERLAY NEUTRALIZATION PIPELINE                      |
++---------------------------------------------------------------------------------------------------+
+| 1. Dynamic Value Hydration    --> Waits for networkidle, input value binding, layout settle       |
+| 2. Universal Cookie Consent   --> Detects OneTrust, Cookiebot, Civic, Osano; auto-clicks Accept   |
+| 3. Interstitial Suppression   --> Dismisses Google OneTap, signup walls, modal backdrops          |
+| 4. Multi-Selector Collapse    --> Collapses open language pickers, dropdowns via Esc / Safe Click |
+| 5. Context Persistence        --> Saves cookies to session_metadata.json & overlay_context.json   |
++---------------------------------------------------------------------------------------------------+
+```
+
+#### 1. Multi-Selector & Language Menu Collapse (`collapse_open_selectors_and_menus`)
+* **Target Elements**: Open dropdowns, language pickers (e.g. LinkedIn language selector), active popovers, and select2 components matching:
+  `[aria-expanded="true"]`, `.dropdown-menu.show`, `.select2-dropdown-open`, `.lang-menu-active`, `.language-selector__menu--open`.
+* **Resolution Strategy**:
+  1. Dispatches keyboard `Escape` events to trigger native client-side dismissal handlers.
+  2. Issues safe simulated clicks to neutral coordinate offsets `(x=10, y=10)` outside interactive bounding boxes.
+  3. Strips modal backdrop elements (`.modal-backdrop`, `.overlay`, `.fade.show`) and forces `document.body.style.overflow = 'auto !important'` and `pointer-events: auto !important`.
+  4. Records all collapsed overlays into `artifacts/crawl/overlay_context.json`.
+
+#### 2. Universal Cookie Consent Auto-Acceptance (`ensure_cookies_accepted`)
+* **Supported Frameworks**: Detects and interacts with major CMPs and custom banners:
+  * **OneTrust**: `#onetrust-accept-btn-handler`, `.onetrust-close-btn-handler`
+  * **Cookiebot**: `#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll`, `#CybotCookiebotDialogBodyButtonAccept`
+  * **Civic Cookie Control**: `#ccc-notify-accept`, `.ccc-accept-button`
+  * **Osano / Quantcast / Klaro**: `[data-cookiebanner="accept"]`, `.qc-cmp2-summary-buttons button`
+  * **Semantic Regex Heuristics**: `button:has-text("Accept All")`, `button:has-text("Allow All")`, `button:has-text("I Agree")`, `button:has-text("Alle Akzeptieren")`.
+* **Continuous Enforcement**: Runs on initial page load AND re-verifies on subsequent page transitions during spider crawls and test execution.
+* **Cryptographic Session Persistence**: Persists all accepted cookies, tokens, and the exact browser `user-agent` to `artifacts/cookies/session_metadata.json`, enabling seamless re-injection across browser sessions.
+
+#### 3. Dynamic Page Stabilization & Value Hydration (`stabilize_and_hydrate_page`)
+* Awaits `networkidle` state and ensures client-side framework hydration (React, Vue, Angular) completes before DOM extraction.
+* Evaluates input field value bindings, guaranteeing that dynamically hydrated values are accurately ingested into the RAG vector index.
+
+#### 4. Robot Framework Native Keywords (`keywords_lib.py`)
+These capabilities are exposed directly to Robot Framework test suites:
+* `Ensure Cookies Accepted`: Automatically accepts CMP banners on the active page context.
+* `Dismiss Intrusive Overlays And Menus`: Collapses all open dropdowns, language pickers, and backdrops.
+* `Wait For DOM Hydration And Stability`: Enforces dynamic hydration stabilization with configurable timeout.
+
+---
+
+### 🛡️ Pre/Post-Run Vector DB Storage Isolation & Cleanup Engine
+
+During rapid CI/CD test iterations, DOM vector indices and embedding stores can accumulate obsolete spatial coordinates, deprecated routes, and stale locators from prior runs. If unmanaged, vector nearest-neighbor searches retrieve outdated elements, causing locator flakiness and false-positive failures.
+
+ATP's [`vector_dom_engine.py`](file:///c:/Users/Junko/Downloads/RagLLM/aspice_qa_framework/engines/vector_dom_engine.py) implements strict **Pre/Post-Run Vector Storage Isolation & Cleanup**:
+
+```text
++---------------------------------------------------------------------------------------------------+
+|                        VECTOR DB STORAGE ISOLATION & PURGE WORKFLOW                               |
++---------------------------------------------------------------------------------------------------+
+| [Test Run Start] ──► clear_storage() ──► Flushes dom_vector_index.json & resets Redis counters     |
+| [Crawler Phase]  ──► is_disallowed_url() ──► Filters blacklisted / sensitive routes (cart, pay)   |
+| [Indexing Phase] ──► Spatial element vectorization on clean, sanitized, overlay-free DOM          |
+| [Test Run End]   ──► cleanup_project_storage() ──► Purges ephemeral indices & resets state        |
++---------------------------------------------------------------------------------------------------+
+```
+
+#### 1. Deterministic Storage Flush (`clear_storage` & `cleanup_project_storage`)
+* **Pre-Run Sanitization**: Before any spidering or test generation run, `clear_storage()` purges `artifacts/vectors/dom_vector_index.json` and resets internal KD-tree memory structures.
+* **Redis Counter Reset**: Resets the `vector_count` and element registry keys in Redis to ensure clean metrics telemetry.
+* **Filesystem Directory Hygiene**: Atomically flushes ephemeral vector files while preserving root directory structure and permissions.
+
+#### 2. Disallowed Route Filtering (`is_disallowed_url`)
+* Prevents vector index contamination by strictly excluding dummy domains and transaction-destructive paths:
+  * Blacklisted Domains: `example.com`, `localhost:8000` (internal proxy loops).
+  * Sensitive Paths: `/cart`, `/checkout`, `/pay`, `/logout`, `/delete-account`.
+* Ensures that the vector index contains only genuine, idempotently testable application landmarks.
+
+#### 3. Programmatic Cleanup REST API
+* `POST /api/vector-db/cleanup`: Triggers pre-run or on-demand storage purge.
+* `DELETE /api/vector-db/cleanup`: Completely wipes vector indices and resets telemetry counters.
 
 ---
 
@@ -1326,6 +1610,12 @@ The FastAPI backend exposes a complete programmatic REST API for automated CI/CD
 | Method | Endpoint Path | Description & Payload | Architectural Consumer |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/crawl` | Dispatches headless spider. Body: `{"url": "...", "depth": 2, "auth": {...}}` | React Dashboard / CI Webhook |
+| `GET` | `/api/coverage/matrix` | Returns Epistemic Coverage Matrix, business invariants, state transitions, and ECI/IPR metrics. | Epistemic Matrix View / Coverage Heatmap |
+| `POST` | `/api/coverage/fulfill` | Triggers targeted sovereign LLM test synthesis to fulfill specific epistemic or discipline gaps. Body: `{"entity": "...", "discipline": "..."}` | 1-Click Gap Fulfiller |
+| `POST` | `/api/coverage/custom-test` | Inserts custom test cases and business assertions into the active suite. Body: `{"entity": "...", "discipline": "...", "test_name": "...", "code": "..."}` | Custom Test Modal |
+| `POST` | `/api/vector-db/cleanup` | Flushes spatial vector files (`dom_vector_index.json`) and resets Redis vector telemetry counters. | Vector DB Isolation / Pre-Run Lifecycle |
+| `DELETE` | `/api/vector-db/cleanup` | Programmatically purges vector DB embeddings and wipes telemetry. | Project Reset / CI Pipeline |
+| `POST` | `/api/cookies/inject` | Injects session cookies and binds browser `user_agent` for authenticated session replay. Body: `{"cookies": [...], "user_agent": "..."}` | Cookie Manager / Modern UI Engine |
 | `GET` | `/api/scope_gate/status` | Queries discovered routes, token burn estimates, and risk profile. | Scope Gate HITL Modal |
 | `POST` | `/api/scope_gate/approve` | Approves target routes. Body: `{"selected_routes": [...], "settings": {...}}` | Scope Gate Confirmation |
 | `POST` | `/api/generate_suite` | Triggers multi-discipline synthesis. Body: `{"suite_types": ["ui", "api", "k6"]}` | Synthesis Engine / Pabot |
