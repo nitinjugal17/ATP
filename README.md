@@ -15,27 +15,387 @@
 [![Celery: Distributed](https://img.shields.io/badge/Celery-5.4%2B-37814A.svg)](https://docs.celeryq.dev/)
 [![Ollama: Local Inference](https://img.shields.io/badge/Ollama-100%25%20Air--Gapped-black.svg)](https://ollama.com/)
 
+> [!TIP]
+> 📖 **Comprehensive Visual User Guide Available**: For an illustrated end-to-end operational handbook with 26 authentic screenshots covering every cockpit view, indicator, modal, and autonomous diagnostic tool in the platform, consult [**USER_GUIDE.md**](USER_GUIDE.md) or open the zero-dependency, self-contained standalone guide [**USER_GUIDE.html**](USER_GUIDE.html) (or visit `http://localhost:8000/guide.html`).
+
+---
+
+## 🚀 Quickstart & Complete Engineer Onboarding Guide (Windows / Linux)
+
+> **Welcome to the Team, Junior Engineer! 🎓**
+>
+> You are looking at the **Enterprise Autonomous Test Platform (ATP)**. This system is designed to eliminate test automation fatigue. Instead of hand-crafting fragile Selenium or Playwright locators that break whenever UI CSS changes, ATP crawls your web applications, captures DOM element semantics, stores vector embeddings locally, and uses local air-gapped Large Language Models (LLMs) to synthesize, heal, and run multi-discipline test suites (Robot Framework BDD, Pytest Selenium POM, Playwright, and Grafana k6).
+>
+> Follow these steps in order. Every single prerequisite, command, and expected output is documented below so you can go from zero to a fully operational enterprise QA cockpit on your Windows machine in under 15 minutes.
+
+```mermaid
+flowchart TD
+    subgraph Prereqs ["Phase 1: Windows Host Pre-Setup"]
+        A["1. Hardware & BIOS Virtualization<br/>(Intel VT-x / AMD-V)"] --> B["2. NVIDIA GPU Drivers & CUDA Toolkit<br/>(CUDA 12.x / nvidia-smi)"]
+        B --> C["3. Windows Subsystem for Linux (WSL 2)<br/>(wsl --install -d Ubuntu-22.04)"]
+        C --> D["4. Docker Desktop for Windows<br/>(WSL 2 Backend Engine)"]
+        D --> E["5. Sovereign Local LLM (Ollama)<br/>(deepseek-r1, nomic-embed, qwen2.5-coder)"]
+    end
+
+    subgraph Deploy ["Phase 2: Hydration & Launch"]
+        E --> F["6. Monolithic File Generation<br/>(python deploy_enterprise_qa.py)"]
+        F --> G["7. One-Click Stack Boot<br/>(START.bat / docker compose up -d)"]
+        G --> H["8. Cockpit Verification<br/>(http://localhost:8000 & Deep Ping)"]
+    end
+
+    style Prereqs fill:#1e1e2f,stroke:#4f46e5,stroke-width:2px,color:#fff
+    style Deploy fill:#0f172a,stroke:#06b6d4,stroke-width:2px,color:#fff
+```
+
+---
+
+### Step 0: Hardware & BIOS Virtualization Verification
+
+ATP runs an enterprise microservices cluster (FastAPI, Redis, Celery, PostgreSQL, MinIO, Elasticsearch, and local LLM runners). To run these efficiently on Windows, **hardware virtualization must be enabled in your motherboard BIOS**.
+
+1. **Check Virtualization in Windows**:
+   - Press `Ctrl + Shift + Esc` to open **Task Manager**.
+   - Navigate to the **Performance** tab and select **CPU**.
+   - Look at the bottom-right corner: verify that **Virtualization: Enabled** is shown.
+2. **If Disabled (How to Enable in BIOS)**:
+   - Reboot your PC and repeatedly press the BIOS key during boot (typically `F2`, `Del`, `F10`, or `F12` depending on your motherboard: ASUS, Dell, HP, Lenovo).
+   - Locate the CPU configuration menu:
+     - **Intel CPU**: Find **Intel Virtualization Technology (VT-x)** and toggle to **Enabled**.
+     - **AMD CPU**: Find **SVM Mode (Secure Virtual Machine / AMD-V)** and toggle to **Enabled**.
+   - Press `F10` to save and reboot back into Windows.
+3. **Check Windows Version**:
+   - Press `Win + R`, type `winver`, and press `Enter`.
+   - Verify you are running **Windows 10 Version 21H2 (Build 19044+) or Windows 11**.
+
+---
+
+### Step 1: NVIDIA GPU Driver & CUDA Toolkit Pre-Setup
+
+ATP utilizes **local hardware GPU acceleration** via NVIDIA CUDA. Local inference allows our LLMs to stream reasoning and test code at **88+ tokens/second** with zero cloud API costs and zero data leakage.
+
+1. **Install NVIDIA Graphics Driver**:
+   - Download and install the latest **Game Ready** or **Studio Driver** from the official NVIDIA portal: [https://www.nvidia.com/download/index.aspx](https://www.nvidia.com/download/index.aspx).
+2. **Install NVIDIA CUDA Toolkit**:
+   - Download **CUDA Toolkit 12.x** (or 11.8+) for Windows: [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
+   - Run the installer with default express settings. This installs the CUDA compiler (`nvcc`) and driver libraries.
+3. **Verify CUDA from Windows PowerShell**:
+   Open a new PowerShell window and execute:
+   ```powershell
+   nvidia-smi
+   ```
+   *Expected Output:*
+   ```text
+   +-----------------------------------------------------------------------------------------+
+   | NVIDIA-SMI 555.99                 Driver Version: 555.99         CUDA Version: 12.5     |
+   |-----------------------------------+------------------------+--------------------------+
+   | GPU  Name                TCC/WDDM | Bus-Id          Disp.A | Volatile Uncorr. ECC     |
+   | Fan  Temp   Perf          Pwr:Usage/Cap | Memory-Usage      | GPU-Util  Compute M.     |
+   |===================================+========================+==========================|
+   |   0  NVIDIA GeForce RTX ...  WDDM | 00000000:01:00.0   On |                      N/A |
+   | N/A   48C    P8              9W / 60W |   1200MiB / 4096MiB|      3%      Default     |
+   +-----------------------------------+------------------------+--------------------------+
+   ```
+   Next, verify the CUDA compiler:
+   ```powershell
+   nvcc --version
+   ```
+   *Expected Output:* `release 12.x, V12.x...`
+
+> [!TIP]
+> **VRAM Budgeting for Junior Engineers**:
+> - **4GB VRAM (Standard Laptop)**: Select `deepseek-r1:1.5b` + `nomic-embed-text`. This fits 100% inside GPU VRAM (`4GB Shared Override`), giving ultra-low latency inference.
+> - **6GB–8GB VRAM (Mid-Tier)**: Supports `qwen2.5-coder:7b` or `deepseek-r1:7b` with up to 16,384 context tokens.
+> - **16GB+ VRAM (Workstation)**: Supports multi-agent parallel test generators and simultaneous multimodal vision scrapers.
+
+---
+
+### Step 2: Windows Subsystem for Linux (WSL 2) Setup
+
+Docker Desktop requires **WSL 2** to run containerized Linux workloads with native near-metal performance and direct NVIDIA GPU passthrough.
+
+1. **Install WSL 2 in Administrator PowerShell**:
+   Right-click the Windows Start menu, select **Terminal (Admin)** or **PowerShell (Run as Administrator)**, and run:
+   ```powershell
+   wsl --install -d Ubuntu-22.04
+   ```
+2. **Update WSL Kernel Component**:
+   ```powershell
+   wsl --update
+   ```
+3. **Verify WSL Status**:
+   ```powershell
+   wsl --status
+   wsl -l -v
+   ```
+   *Expected Output:*
+   ```text
+   Default Version: 2
+     NAME            STATE           VERSION
+   * Ubuntu-22.04    Running         2
+   ```
+   *(If `VERSION` displays `1`, convert it via `wsl --set-version Ubuntu-22.04 2` and `wsl --set-default-version 2`).*
+
+4. **Pro-Engineer Tip: Configure `.wslconfig` (Prevent Memory Starvation)**:
+   By default, WSL 2 can claim up to 50%–80% of your total system RAM. To prevent WSL from starving your Windows host, create a configuration file at `%USERPROFILE%\.wslconfig`:
+   ```powershell
+   notepad $env:USERPROFILE\.wslconfig
+   ```
+   Paste the following optimized configuration and save:
+   ```ini
+   [wsl2]
+   memory=8GB
+   processors=4
+   swap=4GB
+   localhostForwarding=true
+   ```
+   Restart WSL to apply:
+   ```powershell
+   wsl --shutdown
+   ```
+
+---
+
+### Step 3: Docker Desktop for Windows Configuration
+
+1. **Download & Install Docker Desktop**:
+   - Download the official installer: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/).
+   - Launch the installer. During the installation wizard:
+     - **CRITICAL**: Ensure **"Use WSL 2 instead of Hyper-V (recommended)"** is **CHECKED**.
+     - *(Why not Hyper-V? Hyper-V does not provide direct zero-latency CUDA GPU passthrough to Linux containers and uses substantially more RAM).*
+2. **Configure Docker Desktop Settings**:
+   - Start Docker Desktop and click the **Settings (Gear Icon)** in the top right:
+     - **General**: Check `Use the WSL 2 based engine`.
+     - **Resources > WSL Integration**:
+       - Toggle ON: `Enable integration with my default WSL distro`.
+       - Toggle ON: `Ubuntu-22.04`.
+     - **Advanced**: Ensure the Docker socket is exposed (default named pipe `//./pipe/docker_engine`).
+   - Click **Apply & Restart**.
+3. **Verify Docker from PowerShell**:
+   ```powershell
+   docker --version
+   docker compose version
+   docker ps
+   ```
+   *Expected Output:*
+   ```text
+   Docker version 27.x.x, build ...
+   Docker Compose version v2.28.x
+   CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+   ```
+
+---
+
+### Step 4: Sovereign Local LLM Setup (Ollama for Windows)
+
+ATP does not send your application DOM or test code to external cloud APIs. We run sovereign, local open-weights language models using **Ollama for Windows**.
+
+1. **Download & Install Ollama**:
+   - Download the Windows installer: [https://ollama.com/download/windows](https://ollama.com/download/windows).
+   - Run `OllamaSetup.exe`. Once installed, Ollama runs automatically in your Windows system tray.
+2. **Verify Ollama Service**:
+   Open PowerShell and query the local server:
+   ```powershell
+   ollama --version
+   curl http://localhost:11434/
+   ```
+   *Expected Output:* `Ollama is running`
+3. **Pull the Core Triad of Foundation Models**:
+   Run the following commands in PowerShell to pull the pre-tested models into your local library:
+   ```powershell
+   # 1. High-Velocity Reasoning & Test Scenario Planner (~1.1 GB)
+   ollama run deepseek-r1:1.5b
+   # Once loaded, type "/bye" and press Enter to return to terminal
+
+   # 2. Semantic DOM Vector Embedding Model (~274 MB)
+   ollama pull nomic-embed-text
+
+   # 3. Deterministic Code Generation & AST Self-Healing Model (~1.0 GB)
+   ollama pull qwen2.5-coder:1.5b
+   ```
+4. **Confirm GPU Offloading**:
+   In PowerShell, execute a test query:
+   ```powershell
+   ollama run deepseek-r1:1.5b "Hello, state your model architecture"
+   ```
+   While it responds, open another PowerShell window and run `nvidia-smi`. You will observe `ollama_llama_server.exe` running directly inside GPU VRAM with 100% offload.
+
+---
+
+### Step 5: The Monolithic Code Generation Step (`deploy_enterprise_qa.py`)
+
+> **Why does this repository use a Monolithic Generator? 🧠**
+>
+> In production enterprise QA, teams suffer from "configuration drift"—mismatched package dependencies, missing test fixtures, out-of-sync HTML templates, or broken relative imports between disparate microservice files.
+>
+> To solve this, ATP maintains an authoritative, deterministic code synthesizer: **`deploy_enterprise_qa.py`**. Executing this file compiles, hydrates, and validates all 28+ framework engines, API routes, React cockpits, and BVA test suites from scratch, enforcing 100% Abstract Syntax Tree (AST) structural parity.
+
+1. **Clone or Navigate to the Workspace**:
+   ```powershell
+   cd C:\Users\Junko\Downloads\RagLLM
+   ```
+2. **Execute the Monolithic Generator**:
+   ```powershell
+   python deploy_enterprise_qa.py
+   ```
+3. **What `deploy_enterprise_qa.py` Builds & Verifies**:
+   - `aspice_qa_framework/engines/`: Emits 12 microservice engines (DOM Vector Engine, QA Knowledge Graph Engine, Modern UI Engine, Hybrid Chat Assistant, etc.).
+   - `aspice_qa_framework/main.py`: Emits FastAPI gateway with WebSockets, Celery task workers, and REST routes.
+   - `aspice_qa_framework/static/index.html`: Emits the executive React web cockpit with streaming telemetry HUD.
+   - `tests/`: Emits 9 Boundary Value Analysis (BVA) test suites with 49 automated test cases.
+   - `USER_GUIDE.html`: Compiles the 5.13MB zero-dependency offline HTML documentation with 26 pre-embedded Base64 screenshots.
+   - **AST Validation**: Automatically parses every generated file with Python's `ast` parser, guaranteeing 0 syntax errors before completion.
+
+---
+
+### Step 6: One-Click Launch via `START.bat` & Docker Compose Cluster
+
+With prerequisites satisfied and files generated, launching the entire platform is a **single command**:
+
+```cmd
+START.bat
+```
+
+*(Or right-click `START.bat` in Windows File Explorer and click **Open**).*
+
+#### What `START.bat` Does Under the Hood:
+1. Calls `docker compose -f docker-compose-windows.yml up -d`.
+2. Spins up the multi-container microservice cluster:
+   - **`atp_core`** (Port `8000`): FastAPI REST API, WebSocket event bus, and React dashboard.
+   - **`atp_celery`**: Distributed worker engine running headless Chrome spiders, Playwright, and Pabot runners.
+   - **`atp_redis`** (Port `6379`): In-memory task queue broker and IPC state synchronization.
+   - **`atp_storage`** (Ports `9000/9001`): MinIO S3 object storage for test traces and Allure artifacts.
+   - **`atp_ollama`** (Port `11435` / `11434`): Air-gapped LLM inference gateway.
+   - **`atp_proxy`** (Port `80`): Nginx load balancer and static asset caching.
+   - **`atp_db`** (Port `5432`): PostgreSQL test run history and requirements repository.
+   - **`atp_logs`** (Port `9200`): Elasticsearch audit log sink.
+3. Automatically launches your default web browser to **`http://localhost:8000`**.
+
+#### Verifying Cluster Health:
+In PowerShell, check running containers:
+```powershell
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
+*Expected Output:*
+```text
+NAMES        STATUS                  PORTS
+atp_proxy    Up 10 minutes           0.0.0.0:80->80/tcp
+atp_core     Up 10 minutes           0.0.0.0:8000->8000/tcp
+atp_celery   Up 10 minutes
+atp_redis    Up 10 minutes (healthy) 0.0.0.0:6379->6379/tcp
+atp_storage  Up 10 minutes           0.0.0.0:9000-9001->9000-9001/tcp
+atp_ollama   Up 10 minutes           0.0.0.0:11435->11434/tcp
+atp_db       Up 10 minutes (healthy) 5432/tcp
+atp_logs     Up 10 minutes           0.0.0.0:9200->9200/tcp
+```
+
+---
+
+### Step 7: Operating the Cockpit & Running Your First Test
+
+1. Open your browser at **`http://localhost:8000`**.
+2. **Run Sanity Check**:
+   - In the left **Control Plane**, find the **Sanity Matrix** card.
+   - Click the **`[Deep Ping Engine]`** button.
+   - Confirm all microservice badges show bright green **`ONLINE`** dots.
+3. **Configure Your First Autonomous Run**:
+   - **Target Application URL**: Enter any URL (e.g. `https://demo.playwright.dev/todomvc`).
+   - **Execution Mode**: Choose `🚀 Auto-Pilot` (fully autonomous crawl & synthesis) or `🧭 Step Gates` (pause after crawl to inspect discovered routes).
+   - **AI Synthesis Technique**: Select `⚡ Native Direct MCP` (fastest) or `🦜 LangChain Multi-Agent`.
+   - **Target Frameworks**: Select your desired output disciplines (e.g. `Python` + `Robot Framework`, `Pytest + Selenium`, or `Playwright`).
+4. **Trigger Generation**:
+   - Click **`🚀 1-Click Auto-Pilot`** in the top navigation ribbon.
+   - Watch the **6-Stage Pipeline Ribbon** advance in real-time as the spider crawls the DOM, extracts landmarks, computes vector embeddings, and synthesizes code.
+5. **Inspect the Results**:
+   - **`Mindmap & Live Screen`**: View the DOM hierarchy and intercepted screenshots in the center panel.
+   - **`Multi-Discipline Code Gallery`**: Click the `ROBOT`, `UI`, or `API` tabs on the right to inspect fully executable, syntax-checked test suites.
+   - **`[🌐 QA Graph]`**: Open the interactive 2D topology visualizer and click `[▶ Play Flow]` to watch execution flows traverse states.
+   - **`[📖 Guide]`**: Click the guide button in the top navigation bar to open or download the complete 5.13MB self-contained manual (`USER_GUIDE.html`).
+
+---
+
+### Step 8: Operational Management Batch Scripts Reference
+
+The root repository includes dedicated utility scripts for complete lifecycle management on Windows:
+
+| Batch Script | Description & Purpose |
+| :--- | :--- |
+| **`START.bat`** | Boots the complete Docker Compose cluster, waits for health checks, and launches `http://localhost:8000`. |
+| **`STOP.bat`** / **`SHUTDOWN.bat`** | Gracefully terminates all background containers while preserving PostgreSQL database state and generated test files. |
+| **`RESTART.bat`** | Rapidly cycles the `atp_core` backend and `atp_celery` workers without restarting databases. |
+| **`DIAGNOSTICS.bat`** | Launches a live, continuous streaming terminal displaying CPU%, memory RSS, and network I/O per container (`docker stats`). |
+| **`CLEANUP.bat`** | Flushes temporary execution traces, orphaned screenshot caches, and Celery task logs without deleting test suites. |
+| **`RESET_DB.bat`** | Drops and recreates PostgreSQL tables and flushes Redis caches for a complete clean-slate testing cycle. |
+| **`REBUILD.bat`** | Recompiles Docker container images from scratch with `--no-cache` after modifying Python packages or dependencies. |
+
+---
+
+### Step 9: Junior Engineer Troubleshooting Playbook (Top 5 Gotchas)
+
+#### 1. Port Conflict: `Port 8000 or 6379 already in use`
+- **Symptom**: `START.bat` outputs `Bind for 0.0.0.0:8000 failed: port is already allocated`.
+- **Fix**: Identify the process holding the port using Windows PowerShell and terminate it:
+  ```powershell
+  Get-NetTCPConnection -LocalPort 8000 | Select-Object OwningProcess
+  Stop-Process -Id <PID> -Force
+  ```
+
+#### 2. WSL 2 Kernel Error: `0x800701bc: WSL 2 requires an update to its kernel component`
+- **Symptom**: Docker Desktop or `wsl` commands fail with error code `0x800701bc`.
+- **Fix**: Open PowerShell as Administrator and run `wsl --update`. Alternatively, download and install the official Microsoft MSI: [https://aka.ms/wsl2kernel](https://aka.ms/wsl2kernel).
+
+#### 3. Docker Daemon Error: `open //./pipe/docker_engine: The system cannot find the file specified`
+- **Symptom**: Running `docker ps` outputs a pipe connection failure.
+- **Fix**: Docker Desktop is not running. Launch Docker Desktop from the Windows Start menu and wait until the whale icon in the system tray turns solid and reports "Docker Desktop is running".
+
+#### 4. Ollama Returns 0 Tokens or Runs Extremely Slowly on CPU
+- **Symptom**: Test generation takes minutes and `nvidia-smi` shows 0% GPU utilization.
+- **Fix**: 
+  1. Verify Ollama is running (`curl http://localhost:11434/`).
+  2. In the web cockpit's **Control Plane**, slide the **Context Window** down from `16384` to `4096` tokens.
+  3. Ensure your model is `deepseek-r1:1.5b` or `qwen2.5-coder:1.5b` to guarantee 100% VRAM residency.
+
+#### 5. Code or UI Changes Not Appearing in the Browser
+- **Symptom**: You edited a script or template, but the web UI still shows old content.
+- **Fix**: 
+  1. Re-run `python deploy_enterprise_qa.py` to compile the changes across the framework.
+  2. Press `Ctrl + F5` in your browser to hard-reload and bypass browser cache.
+  3. Run `docker restart atp_core` to reload the backend container.
+
+---
+
 ## 📑 Table of Contents
-1. [Why Use This as an Enterprise QA Framework?](#-why-use-this-as-an-enterprise-qa-framework)
-2. [Data Sovereignty & Zero Data Leakage (The Enterprise QA Imperative)](#-data-sovereignty--zero-data-leakage-the-enterprise-qa-imperative)
-3. [Inference Cost Economics: Cloud APIs vs. Local Sovereign ATP](#-inference-cost-economics-cloud-apis-vs-local-sovereign-atp)
-4. [High-Velocity Inference on Budget Hardware ($600–$1,000 Laptop Reality)](#-high-velocity-inference-on-budget-hardware-6001000-laptop-reality)
-5. [Develop Your Own Test Framework: Complete Model & Resource Sovereignty](#-develop-your-own-test-framework-complete-model--resource-sovereignty)
-6. [🏗️ Generated Files Architecture & Component Blueprint](#-generated-files-architecture--component-blueprint)
+0. [🚀 Quickstart & Complete Engineer Onboarding Guide (Windows / Linux)](#-quickstart--complete-engineer-onboarding-guide-windows--linux)
+   * [Step 0: Hardware & BIOS Virtualization Verification](#step-0-hardware--bios-virtualization-verification)
+   * [Step 1: NVIDIA GPU Driver & CUDA Toolkit Pre-Setup](#step-1-nvidia-gpu-driver--cuda-toolkit-pre-setup)
+   * [Step 2: Windows Subsystem for Linux (WSL 2) Setup](#step-2-windows-subsystem-for-linux-wsl-2-setup)
+   * [Step 3: Docker Desktop for Windows Configuration](#step-3-docker-desktop-for-windows-configuration)
+   * [Step 4: Sovereign Local LLM Setup (Ollama for Windows)](#step-4-sovereign-local-llm-setup-ollama-for-windows)
+   * [Step 5: The Monolithic Code Generation Step (`deploy_enterprise_qa.py`)](#step-5-the-monolithic-code-generation-step-deploy_enterprise_qapy)
+   * [Step 6: One-Click Launch via `START.bat` & Docker Compose Cluster](#step-6-one-click-launch-via-startbat--docker-compose-cluster)
+   * [Step 7: Operating the Cockpit & Running Your First Test](#step-7-operating-the-cockpit--running-your-first-test)
+   * [Step 8: Operational Management Batch Scripts Reference](#step-8-operational-management-batch-scripts-reference)
+   * [Step 9: Junior Engineer Troubleshooting Playbook (Top 5 Gotchas)](#step-9-junior-engineer-troubleshooting-playbook-top-5-gotchas)
+1. [📖 Comprehensive Visual User Guide & Actual Screenshot Gallery (USER_GUIDE.md)](USER_GUIDE.md)
+2. [Why Use This as an Enterprise QA Framework?](#-why-use-this-as-an-enterprise-qa-framework)
+3. [Data Sovereignty & Zero Data Leakage (The Enterprise QA Imperative)](#-data-sovereignty--zero-data-leakage-the-enterprise-qa-imperative)
+4. [Inference Cost Economics: Cloud APIs vs. Local Sovereign ATP](#-inference-cost-economics-cloud-apis-vs-local-sovereign-atp)
+5. [High-Velocity Inference on Budget Hardware ($600–$1,000 Laptop Reality)](#-high-velocity-inference-on-budget-hardware-6001000-laptop-reality)
+6. [Develop Your Own Test Framework: Complete Model & Resource Sovereignty](#-develop-your-own-test-framework-complete-model--resource-sovereignty)
+7. [🏗️ Generated Files Architecture & Component Blueprint](#-generated-files-architecture--component-blueprint)
    * [Project Structure Blueprint](#project-structure-blueprint)
    * [Architectural Responsibilities by File](#architectural-responsibilities-by-file)
-7. [🔄 End-to-End Application & Inference Sequence UML](#-end-to-end-application--inference-sequence-uml)
-8. [🧹 Multi-Stage Sanitization, RAG Context Injection & Re-Sanitization Pipeline](#-multi-stage-sanitization-rag-context-injection--re-sanitization-pipeline)
-9. [🧪 Integrated Test Disciplines](#-integrated-test-disciplines)
-   * [🧠 Epistemic Test Coverage Matrix (ECM) & Semantic Domain Understanding Framework](#-epistemic-test-coverage-matrix-ecm--semantic-domain-understanding-framework)
-   * [🧹 Automated Multi-Selector Overlay Dismissal & Universal Cookie Acceptance](#-automated-multi-selector-overlay-dismissal--universal-cookie-acceptance)
-   * [🛡️ Pre/Post-Run Vector DB Storage Isolation & Cleanup Engine](#-prepost-run-vector-db-storage-isolation--cleanup-engine)
-   * [🌐 Enterprise Multi-Vector API Discovery Engine (`api_crawler.py`)](#-enterprise-multi-vector-api-discovery-engine-api_crawlerpy)
-   * [👁️ Multi-Library Smart DOM Crawling & Visual WCAG 1.1.1 Accessibility Audit](#-multi-library-smart-dom-crawling--visual-wcag-111-accessibility-audit)
-   * [📑 Enhanced 3-Pillar Master Requirements Document (BRD, PRD, FRD)](#-enhanced-3-pillar-master-requirements-document-brd-prd-frd)
-   * [🚀 Multi-Scenario k6 Concurrency & Repeated Iteration Engine (`auto_load_test.js`)](#-multi-scenario-k6-concurrency--repeated-iteration-engine-auto_load_testjs)
-   * [🗺️ Enterprise Coverage Heatmap & Gap Fulfiller (`coverage_engine.py`)](#-enterprise-coverage-heatmap--gap-fulfiller-coverage_enginepy)
-10. [📋 Sample Generated Test Suites (Multi-Discipline Code Gallery)](#-sample-generated-test-suites-multi-discipline-code-gallery)
+8. [🔄 End-to-End Application & Inference Sequence UML](#-end-to-end-application--inference-sequence-uml)
+9. [🧹 Multi-Stage Sanitization, RAG Context Injection & Re-Sanitization Pipeline](#-multi-stage-sanitization-rag-context-injection--re-sanitization-pipeline)
+10. [🧪 Integrated Test Disciplines](#-integrated-test-disciplines)
+    * [🧠 Epistemic Test Coverage Matrix (ECM) & Semantic Domain Understanding Framework](#-epistemic-test-coverage-matrix-ecm--semantic-domain-understanding-framework)
+    * [🧹 Automated Multi-Selector Overlay Dismissal & Universal Cookie Acceptance](#-automated-multi-selector-overlay-dismissal--universal-cookie-acceptance)
+    * [🛡️ Pre/Post-Run Vector DB Storage Isolation & Cleanup Engine](#-prepost-run-vector-db-storage-isolation--cleanup-engine)
+    * [🌐 Enterprise Multi-Vector API Discovery Engine (`api_crawler.py`)](#-enterprise-multi-vector-api-discovery-engine-api_crawlerpy)
+    * [👁️ Multi-Library Smart DOM Crawling & Visual WCAG 1.1.1 Accessibility Audit](#-multi-library-smart-dom-crawling--visual-wcag-111-accessibility-audit)
+    * [📑 Enhanced 3-Pillar Master Requirements Document (BRD, PRD, FRD)](#-enhanced-3-pillar-master-requirements-document-brd-prd-frd)
+    * [🚀 Multi-Scenario k6 Concurrency & Repeated Iteration Engine (`auto_load_test.js`)](#-multi-scenario-k6-concurrency--repeated-iteration-engine-auto_load_testjs)
+    * [🗺️ Enterprise Coverage Heatmap & Gap Fulfiller (`coverage_engine.py`)](#-enterprise-coverage-heatmap--gap-fulfiller-coverage_enginepy)
+11. [📋 Sample Generated Test Suites (Multi-Discipline Code Gallery)](#-sample-generated-test-suites-multi-discipline-code-gallery)
     * [1. Unified Enterprise Test Automation Harness (Robot Framework, Selenium 4, Pyppeteer)](#1-unified-enterprise-test-automation-harness-robot-framework-selenium-4-pyppeteer)
     * [2. Deterministic CI/CD WAF Allowlisting & Cloudflare Turnstile Verification Strategy](#2-deterministic-cicd-waf-allowlisting--cloudflare-turnstile-verification-strategy)
     * [3. Resilient E2E UI Suite with Dynamic Landmark & Section Hierarchy Verification (`auto_ui_test.py`)](#3-resilient-e2e-ui-suite-with-dynamic-landmark--section-hierarchy-verification-auto_ui_testpy)
@@ -43,17 +403,14 @@
     * [5. Multi-Scenario Load & Concurrency Suite (`auto_load_test.js`)](#5-multi-scenario-load--concurrency-suite-auto_load_testjs)
     * [6. Acceptance BDD Suite & Full Keyword Harness (`auto_suite.robot` & `keywords_lib.py`)](#6-acceptance-bdd-suite--full-keyword-harness-auto_suiterobot--keywords_libpy)
     * [7. Pabot Parallel Execution Transcript & Human-Readable Verification Log](#7-pabot-parallel-execution-transcript--human-readable-verification-log)
-11. [🛡️ Automotive ASPICE & ISO 26262 Bidirectional Traceability (RTM)](#-automotive-aspice--iso-26262-bidirectional-traceability-rtm)
-12. [⚡ Live Load Testing & Hardware Calibrator](#-live-load-testing--hardware-calibrator)
-13. [📡 Complete REST API & Real-Time Telemetry Reference](#-complete-rest-api--real-time-telemetry-reference)
+12. [🛡️ Automotive ASPICE & ISO 26262 Bidirectional Traceability (RTM)](#-automotive-aspice--iso-26262-bidirectional-traceability-rtm)
+13. [⚡ Live Load Testing & Hardware Calibrator](#-live-load-testing--hardware-calibrator)
+14. [📡 Complete REST API & Real-Time Telemetry Reference](#-complete-rest-api--real-time-telemetry-reference)
     * [REST Endpoints Specification](#rest-endpoints-specification)
     * [⚡ High-Speed Lightweight Project Export & Safe Non-Destructive Reload Engine (<1MB, <0.3s)](#-high-speed-lightweight-project-export--safe-non-destructive-reload-engine-1mb-03s)
-14. [🔧 Setup Troubleshooting & Practical Debug Scenarios](#-setup-troubleshooting--practical-debug-scenarios)
-15. [🚀 Quickstart & Operations Guide](#-quickstart--operations-guide)
-    * [Prerequisites & One-Click Windows Deployment](#prerequisites)
-    * [Unified Poetry, Robot Framework & Pytest Execution](#unified-poetry-robot-framework--pytest-execution)
-    * [Programmatic CLI Project Export & Reload via cURL](#programmatic-cli-project-export--reload-via-curl)
-16. [📄 License & Attribution](#-license--attribution)
+15. [🔧 Setup Troubleshooting & Practical Debug Scenarios](#-setup-troubleshooting--practical-debug-scenarios)
+16. [💻 Advanced CLI Execution (Poetry, Robot, k6 & cURL)](#-advanced-cli-execution-poetry-robot-k6--curl)
+17. [📄 License & Attribution](#-license--attribution)
 
 ---
 
@@ -634,6 +991,16 @@ sequenceDiagram
         ECM-->>API: Synthesized Test Script with Business Invariant Assertions
         API-->>UI: Test Script Appended & ECM Heatmap Re-Calculated
     end
+
+    opt Domain Clarification Advisory & Remediation (AI-Powered)
+        SDET->>UI: Clicks "🤖 Suggest What To Do (AI)" in Clarification Gate
+        UI->>API: POST /api/coverage/suggest-clarifications {target_url, model_name}
+        API->>ECM: suggest_clarification_remediations(target_url, model_name)
+        ECM->>Model: Prompt Gap Analysis & Remediation Synthesis
+        Model-->>ECM: Ranked Remediation Advisory JSON + Delta-ECI Estimates
+        ECM-->>API: Epistemic Advisory Payload
+        API-->>UI: Displays AI Remediation Drawer with Ranked Actions & 1-Click Fulfill
+    end
 ```
 
 ---
@@ -805,6 +1172,22 @@ stateDiagram-v2
 ```
 
 *All epistemic models, invariants, state transitions, and radar discoveries are persisted to `artifacts/reports/coverage_matrix.json` and rendered interactively in the Web Dashboard.*
+
+#### 4. Domain Clarification Gate & LLM-Powered Advisory Engine (`suggest_clarification_remediations`)
+
+When critical business invariants, unverified state transitions, or unvalidated environmental assumptions are detected, the deployment gate triggers a proactive advisory alert:
+> `Deployment Gate Alert: N critical business invariants or assumptions are currently unverified.`
+
+Instead of leaving SDETs to guess which tests to write, the **Domain Clarification Gate** provides an autonomous AI advisory engine:
+1. **Multi-Discipline Gap Analysis**: Ingests active epistemic metrics ($\text{ECI}$, $\text{IPR}$, $\text{STC}$, $\text{AVR}$), unverified state transitions, unvalidated environmental assumptions, and specification ambiguities.
+2. **Local Sovereign LLM Prompting**: Prompts the local air-gapped Ollama engine (with deterministic fallback heuristics) to generate prioritized, domain-specific remediation items.
+3. **Ranked Advisory Items**:
+   - **Priority Rating**: `HIGH`, `MEDIUM`, `LOW`
+   - **Category**: `STATE_MACHINE`, `ASSUMPTION_VALIDATION`, `AMBIGUITY_RESOLUTION`, `INVARIANT_PRESERVATION`
+   - **Mathematical Gain**: Estimated $\Delta \text{ECI}\%$ uplift upon test fulfillment
+   - **Implementation Difficulty**: `EASY`, `MODERATE`, `COMPLEX`
+   - **Specific Action, Rationale, and Ready-to-Execute Code Template**: Pre-formatted Robot Framework or Pytest verification blocks.
+4. **1-Click Auto-Fulfill**: Clicking **"⚡ Auto-Fulfill Test"** directly executes `POST /api/coverage/custom-test`, appending the verification logic to `auto_suite.robot` or `auto_api_test.py` and immediately recalculating the Epistemic Matrix.
 
 ---
 
@@ -1612,6 +1995,7 @@ The FastAPI backend exposes a complete programmatic REST API for automated CI/CD
 | `POST` | `/api/crawl` | Dispatches headless spider. Body: `{"url": "...", "depth": 2, "auth": {...}}` | React Dashboard / CI Webhook |
 | `GET` | `/api/coverage/matrix` | Returns Epistemic Coverage Matrix, business invariants, state transitions, and ECI/IPR metrics. | Epistemic Matrix View / Coverage Heatmap |
 | `POST` | `/api/coverage/fulfill` | Triggers targeted sovereign LLM test synthesis to fulfill specific epistemic or discipline gaps. Body: `{"entity": "...", "discipline": "..."}` | 1-Click Gap Fulfiller |
+| `POST` | `/api/coverage/suggest-clarifications` | Analyzes active epistemic gaps, prompts sovereign LLM, and returns ranked remediation items with estimated $\Delta \text{ECI}\%$. Body: `{"target_url": "...", "model_name": "..."}` | Domain Clarification Gate / AI Advisory Drawer |
 | `POST` | `/api/coverage/custom-test` | Inserts custom test cases and business assertions into the active suite. Body: `{"entity": "...", "discipline": "...", "test_name": "...", "code": "..."}` | Custom Test Modal |
 | `POST` | `/api/vector-db/cleanup` | Flushes spatial vector files (`dom_vector_index.json`) and resets Redis vector telemetry counters. | Vector DB Isolation / Pre-Run Lifecycle |
 | `DELETE` | `/api/vector-db/cleanup` | Programmatically purges vector DB embeddings and wipes telemetry. | Project Reset / CI Pipeline |
@@ -1749,43 +2133,14 @@ ATP implements an **Intelligent Allowlist / Blacklist Export & Reload Engine**:
 
 ---
 
-## 🚀 Quickstart & Operations Guide
+## 💻 Advanced CLI Execution (Poetry, Robot, k6 & cURL)
 
-### Prerequisites
-* **OS**: Windows 10/11, macOS, or Linux.
-* **Docker Desktop**: Installed and running with GPU acceleration enabled (WSL2 with NVIDIA CUDA on Windows).
-* **Python**: 3.10 to 3.12 with Poetry installed.
-* **Hardware**: Minimum 4-core CPU, 8GB RAM, and any modern GPU (e.g., NVIDIA RTX 3050 4GB+).
+> [!NOTE]
+> For complete Windows workstation onboarding, prerequisite installations (CUDA, WSL 2, Docker Desktop, Ollama), monolithic code generation, and one-click container launches via `START.bat`, consult the [**Quickstart & Complete Engineer Onboarding Guide at the top of this document**](#-quickstart--complete-engineer-onboarding-guide-windows--linux).
 
-### One-Click Windows Deployment
-```cmd
-:: 1. Initial Setup (Pulls base images & creates directories)
-SETUP.bat
+For headless CI/CD execution environments, Jenkins pipelines, or local developer testing without Docker, the framework can be executed directly using Poetry and command-line test runners:
 
-:: 2. Launch Enterprise Cluster (Starts containers & opens browser)
-START.bat
-
-:: Access Dashboard:
-:: http://localhost:8000
-```
-
-### Manual Docker Compose Launch
-```bash
-# Start all microservices in detached mode
-docker-compose -f docker-compose-windows.yml up -d
-
-# Verify cluster status
-docker ps
-
-# Stream logs
-docker-compose -f docker-compose-windows.yml logs -f
-```
-
----
-
-### Unified Poetry, Robot Framework & Pytest Execution
-
-The framework can be executed directly from your local environment or CI/CD runner using Poetry:
+### 1. Unified Poetry, Robot Framework & Pytest Execution
 
 ```bash
 # 1. Install all dependencies via Poetry
@@ -1806,13 +2161,13 @@ poetry run pytest tests/ -m waf_protected -v
 # 6. Execute Multi-Scenario Grafana k6 Load Test
 poetry run k6 run artifacts/scripts/auto_load_test.js
 
-# 7. Execute Pabot Parallel Multi-Core Runner
+# 7. Execute Pabot Parallel Multi-Core Runner inside Docker
 docker exec -it atp_celery pabot --processes 4 --outputdir artifacts/reports/pabot_results artifacts/scripts/auto_suite.robot
 ```
 
 ---
 
-### Programmatic CLI Project Export & Reload via cURL
+### 2. Programmatic CLI Project Export & Reload via cURL
 
 Export and restore test projects programmatically inside CI/CD pipelines:
 
@@ -1827,17 +2182,6 @@ curl -X POST "http://localhost:8000/api/system/import" \
 # 3. In-Place Project Cache Reload
 curl -X POST "http://localhost:8000/api/system/reload"
 ```
-
----
-
-### Operational Batch Scripts Included
-* `START.bat`: Boots the Docker cluster, waits for health checks, and launches `http://localhost:8000`.
-* `SETUP.bat`: Pulls base Ollama images and creates directory structures.
-* `SHUTDOWN.bat`: Gracefully stops containers while preserving database state.
-* `RESET_DB.bat`: Wipes Postgres and Redis volumes to restore a clean slate.
-* `CLEANUP.bat`: Cleans temp logs, screenshots, and test execution traces.
-* `DIAGNOSTICS.bat`: Displays live container resource statistics via `docker stats`.
-* `REBUILD.bat`: Rebuilds backend and worker images from scratch.
 
 ---
 
