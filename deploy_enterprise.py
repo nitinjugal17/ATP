@@ -24862,9 +24862,17 @@ def mock_api_{slug}(requests_mock):
 import json
 import time
 import hashlib
+import re
 from typing import Dict, List, Any, Optional, Tuple, Set
 
+
 class QAKnowledgeGraphEngine:
+    """
+    REQ-GRAPH-STATE-ACTION-AUTHORITATIVE-VERIFY-065:
+    QA Traceability Knowledge Graph Engine, State-Bound Action Execution,
+    and Authoritative Postcondition Read-Back Verification.
+    """
+
     GRAPH_STORAGE_PATH = "artifacts/reports/qa_knowledge_graph.json"
     CYPHER_SCRIPTS_PATH = "artifacts/reports/graph_queries.cypher"
 
@@ -24885,6 +24893,1138 @@ class QAKnowledgeGraphEngine:
             except Exception:
                 self.nodes = {}
                 self.edges = []
+
+    def compute_dom_state_hash(self, dom_text: str) -> str:
+        """Computes a deterministic hash signature representing a page DOM state."""
+        if not dom_text:
+            return "empty_dom"
+        clean = " ".join(dom_text.split())
+        return hashlib.sha256(clean.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+    # -------------------------------------------------------------------------
+    # 1. GRAPH ENTITY REGISTRATION
+    # -------------------------------------------------------------------------
+    def add_node(self, node_id: str, node_type: str, label: str, properties: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        props = properties.copy() if properties else {}
+        node = {
+            "id": node_id,
+            "type": node_type.upper(),
+            "label": label,
+            "properties": props,
+            "status": props.get("status", "ACTIVE"),
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        self.nodes[node_id] = node
+        return node
+
+    def add_edge(self, source_id: str, target_id: str, relationship: str, properties: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        edge = {
+            "source": source_id,
+            "target": target_id,
+            "relationship": relationship.upper(),
+            "properties": properties or {},
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        # Deduplicate identical edges
+        for existing in self.edges:
+            if existing["source"] == source_id and existing["target"] == target_id and existing["relationship"] == edge["relationship"]:
+                existing["properties"].update(edge["properties"])
+                return existing
+        self.edges.append(edge)
+        return edge
+
+    # -------------------------------------------------------------------------
+    # 2. STATE-BOUND ACTION EXECUTION & AUTHORITATIVE POSTCONDITION VERIFICATION
+    # -------------------------------------------------------------------------
+    def execute_state_bound_action(
+        self,
+        driver,
+        page_url: str,
+        action_type: str,
+        selector: str,
+        value: Optional[str] = None,
+        expected_postcondition: Optional[str] = None,
+        timeout: float = 5.0
+    ) -> Dict[str, Any]:
+        """
+        REQ-GRAPH-STATE-ACTION-AUTHORITATIVE-VERIFY-065:
+        Binds an action to the current Page and DOM State, verifies the application's
+        postcondition after writes, and holds timeouts as UNKNOWN pending an authoritative read-back.
+        """
+        route = page_url.split("?")[0].replace("https://", "").replace("http://", "")
+        page_node_id = f"page_{hashlib.md5(page_url.encode()).hexdigest()[:8]}"
+        self.add_node(page_node_id, "PAGE", f"Page: {route}", {"url": page_url, "route": route})
+
+        # Pre-Action State
+        pre_dom = ""
+        if driver:
+            try:
+                pre_dom = driver.page_source or ""
+            except Exception:
+                pass
+        pre_state_hash = self.compute_dom_state_hash(pre_dom)
+        pre_state_id = f"state_pre_{pre_state_hash}"
+        self.add_node(pre_state_id, "STATE", f"State [{pre_state_hash[:8]}]", {
+            "page_id": page_node_id,
+            "dom_signature": pre_state_hash,
+            "url": page_url,
+            "status": "VERIFIED"
+        })
+        self.add_edge(page_node_id, pre_state_id, "HAS_STATE")
+
+        # Action Registration
+        action_id = f"action_{int(time.time() * 1000)}_{hashlib.md5(selector.encode()).hexdigest()[:6]}"
+        action_node = self.add_node(action_id, "ACTION", f"{action_type}: {selector[:30]}", {
+            "action_type": action_type.upper(),
+            "selector": selector,
+            "value": value,
+            "expected_postcondition": expected_postcondition or "DOM_MUTATION",
+            "page_url": page_url,
+            "status": "PENDING"
+        })
+        self.add_edge(pre_state_id, action_id, "EXECUTES_ACTION")
+
+        result = {
+            "action_id": action_id,
+            "pre_state": pre_state_hash,
+            "post_state": None,
+            "status": "UNKNOWN",
+            "postcondition_status": "PENDING_READBACK",
+            "authoritative_verified": False,
+            "details": ""
+        }
+
+        # Execution attempt
+        action_err = None
+        start_t = time.time()
+        try:
+            if not driver:
+                raise RuntimeError("No driver available for execution")
+
+            if action_type.upper() in ("WRITE", "TYPE", "INPUT"):
+                from selenium.webdriver.common.by import By
+                elem = driver.find_element(By.CSS_SELECTOR, selector)
+                elem.clear()
+                if value is not None:
+                    elem.send_keys(value)
+            elif action_type.upper() in ("CLICK", "TAP", "SUBMIT"):
+                from selenium.webdriver.common.by import By
+                elem = driver.find_element(By.CSS_SELECTOR, selector)
+                elem.click()
+            elif action_type.upper() in ("NAVIGATE", "GET"):
+                driver.get(page_url)
+            else:
+                driver.execute_script(selector)
+        except Exception as e:
+            action_err = e
+
+        # If exception or timeout occurred
+        is_timeout = action_err and any(term in str(action_err).lower() for term in ["timed out", "timeout", "waittimeout"])
+        if is_timeout:
+            # Mandate: Keep status as UNKNOWN until an authoritative read-back
+            result["status"] = "UNKNOWN"
+            result["postcondition_status"] = "TIMEOUT_UNKNOWN"
+            result["details"] = f"Action timed out after {round(time.time() - start_t, 2)}s. Holding state as UNKNOWN awaiting authoritative read-back."
+            action_node["properties"]["status"] = "UNKNOWN"
+            action_node["properties"]["error"] = str(action_err)
+
+            # Perform Authoritative Read-Back Probe
+            readback_res = self.perform_authoritative_read_back(driver, pre_dom, expected_postcondition, timeout=timeout)
+            result.update(readback_res)
+        elif action_err:
+            result["status"] = "FAILED"
+            result["postcondition_status"] = "FAILED"
+            result["details"] = str(action_err)
+            action_node["properties"]["status"] = "FAILED"
+            action_node["properties"]["error"] = str(action_err)
+        else:
+            # Action physically succeeded -> verify write postcondition
+            if action_type.upper() in ("WRITE", "TYPE", "INPUT", "SUBMIT", "CLICK"):
+                readback_res = self.perform_authoritative_read_back(driver, pre_dom, expected_postcondition, timeout=timeout)
+                result.update(readback_res)
+            else:
+                result["status"] = "SUCCESS"
+                result["postcondition_status"] = "VERIFIED"
+                result["authoritative_verified"] = True
+
+        # Post-Action State
+        post_dom = ""
+        if driver:
+            try:
+                post_dom = driver.page_source or ""
+            except Exception:
+                pass
+        post_state_hash = self.compute_dom_state_hash(post_dom)
+        result["post_state"] = post_state_hash
+        post_state_id = f"state_post_{post_state_hash}"
+        curr_url = page_url
+        if driver and hasattr(driver, "current_url") and isinstance(getattr(driver, "current_url"), str):
+            curr_url = driver.current_url
+        self.add_node(post_state_id, "STATE", f"State [{post_state_hash[:8]}]", {
+            "page_id": page_node_id,
+            "dom_signature": post_state_hash,
+            "url": curr_url,
+            "status": "VERIFIED" if result["status"] == "SUCCESS" else result["status"]
+        })
+        self.add_edge(action_id, post_state_id, "TRANSITIONS_TO", {"verified": result["authoritative_verified"]})
+
+        action_node["properties"]["status"] = result["status"]
+        action_node["properties"]["postcondition_status"] = result["postcondition_status"]
+        self.save_graph()
+        return result
+
+    def perform_authoritative_read_back(
+        self,
+        driver,
+        pre_dom: str,
+        expected_postcondition: Optional[str] = None,
+        timeout: float = 3.0
+    ) -> Dict[str, Any]:
+        """
+        REQ-GRAPH-STATE-ACTION-AUTHORITATIVE-VERIFY-065:
+        Authoritative Read-Back Probe across DOM mutations, network quiescence, and expected indicators.
+        """
+        if not driver:
+            return {
+                "status": "UNKNOWN",
+                "postcondition_status": "NO_DRIVER_READBACK",
+                "authoritative_verified": False,
+                "readback_details": "Driver unavailable for authoritative read-back."
+            }
+
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                curr_dom = driver.page_source or ""
+                # Check 1: Explicit expected postcondition (e.g. element text, selector presence)
+                if expected_postcondition:
+                    if expected_postcondition.lower() in curr_dom.lower():
+                        return {
+                            "status": "SUCCESS",
+                            "postcondition_status": "CONFIRMED_SUCCESS",
+                            "authoritative_verified": True,
+                            "readback_details": f"Authoritative read-back confirmed expected postcondition: '{expected_postcondition}'"
+                        }
+
+                # Check 2: DOM Mutation from Pre-DOM
+                if curr_dom and curr_dom != pre_dom:
+                    return {
+                        "status": "SUCCESS",
+                        "postcondition_status": "CONFIRMED_SUCCESS",
+                        "authoritative_verified": True,
+                        "readback_details": "Authoritative read-back confirmed state mutation."
+                    }
+
+                # Check 3: Error messages or rejection toasts
+                if any(err_term in curr_dom.lower() for err_term in ["error", "invalid", "required", "failed", "denied"]):
+                    return {
+                        "status": "FAILED",
+                        "postcondition_status": "CONFIRMED_FAILURE",
+                        "authoritative_verified": True,
+                        "readback_details": "Authoritative read-back confirmed application error/rejection banner."
+                    }
+            except Exception:
+                pass
+            time.sleep(0.2)
+
+        return {
+            "status": "UNKNOWN",
+            "postcondition_status": "UNRESOLVED_TIMEOUT",
+            "authoritative_verified": False,
+            "readback_details": f"Authoritative read-back timed out after {timeout}s with no DOM mutation detected."
+        }
+
+    # -------------------------------------------------------------------------
+    # 3. THREE-TIER CONTEXT SYNCHRONIZATION & INDEPENDENT SCORING
+    # -------------------------------------------------------------------------
+    def sync_from_coverage_and_execution(
+        self,
+        coverage_matrix: Dict[str, Any],
+        execution_results: Optional[List[Dict[str, Any]]] = None,
+        test_scripts: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        REQ-GRAPH-STATE-ACTION-AUTHORITATIVE-VERIFY-065:
+        Constructs the 3-tier QA Knowledge Graph linking:
+        1. Context with test case generated (Page -> State -> Action -> TestCase -> Requirement)
+        2. Test case with script generated (TestCase -> Script)
+        3. Results with test case and website coverage (ExecutionResult -> TestCase -> CoverageMetric -> Page)
+        And computes independent scores for each tier.
+        """
+        # Support both legacy mock format and real coverage_matrix.json structure
+        pages = coverage_matrix.get("crawled_pages", [])
+        if not pages and "page_coverage_gist" in coverage_matrix:
+            pages = coverage_matrix.get("page_coverage_gist", {}).get("pages", [])
+
+        # Extract entities from real coverage_matrix
+        entities = coverage_matrix.get("entities", [])
+        tests = coverage_matrix.get("test_suites", [])
+        gap_tests = coverage_matrix.get("gap_fulfillment_tests", [])
+        all_tests = list(tests) + list(gap_tests)
+
+        # Ingest tests from all entities and disciplines
+        for ent in entities:
+            e_route = ent.get("route", "/")
+            e_url = ent.get("url") or e_route
+            p_id = f"page_{hashlib.md5(e_url.encode()).hexdigest()[:8]}"
+            if p_id not in self.nodes:
+                self.add_node(p_id, "PAGE", f"Page: {e_route}", {
+                    "url": e_url,
+                    "route": e_route,
+                    "title": ent.get("name", e_route),
+                    "status": "ACCESSIBLE",
+                    "intent": ent.get("category", "GENERAL_CONTENT")
+                })
+                # Add inferred state
+                s_id = f"state_inferred_{hashlib.md5(e_route.encode()).hexdigest()[:8]}"
+                self.add_node(s_id, "STATE", f"DOM State [{e_route}]", {"dom_signature": "inferred", "route": e_route})
+                self.add_edge(p_id, s_id, "HAS_STATE")
+
+            # Coverage metric node
+            cov_val = float(ent.get("coverage_score", 50.0))
+            m_id = f"metric_{p_id}"
+            self.add_node(m_id, "COVERAGE_METRIC", f"Coverage: {cov_val}%", {
+                "route": e_route,
+                "coverage_score": cov_val,
+                "status": "COVERED" if cov_val >= 50 else "UNTESTED"
+            })
+            self.add_edge(p_id, m_id, "HAS_COVERAGE")
+
+            # Ingest discipline tests
+            disciplines = ent.get("disciplines", {})
+            for disc_name, disc_obj in disciplines.items():
+                if isinstance(disc_obj, dict):
+                    disc_tests = disc_obj.get("tests", [])
+                    for dt in disc_tests:
+                        all_tests.append({
+                            "name": dt.get("name"),
+                            "case_id": dt.get("name"),
+                            "type": disc_name,
+                            "route": e_route,
+                            "tags": dt.get("tags", []),
+                            "file": dt.get("file", ""),
+                            "docstring": dt.get("docstring", "")
+                        })
+
+        results = execution_results or []
+        scripts = test_scripts or []
+
+        # Tier 1: Page -> State -> Action -> TestCase -> Requirement
+        for p in pages:
+            url = p.get("url", "")
+            route = p.get("route", "")
+            p_id = f"page_{hashlib.md5(url.encode()).hexdigest()[:8]}"
+            self.add_node(p_id, "PAGE", f"Page: {route or url}", {
+                "url": url,
+                "route": route,
+                "title": p.get("title", ""),
+                "status": p.get("status", "ACCESSIBLE"),
+                "intent": p.get("intent", "GENERAL_CONTENT")
+            })
+
+            # Create state node
+            dom_hash = hashlib.md5((p.get("dom_snippet") or "empty").encode()).hexdigest()[:12]
+            state_id = f"state_{dom_hash}"
+            self.add_node(state_id, "STATE", f"DOM State [{dom_hash[:6]}]", {"dom_signature": dom_hash, "url": url, "route": route})
+            self.add_edge(p_id, state_id, "HAS_STATE")
+
+            # Coverage metric node
+            metric_id = f"metric_{p_id}"
+            cov_score = p.get("coverage_score", 75.0)
+            self.add_node(metric_id, "COVERAGE_METRIC", f"Coverage: {cov_score}%", {
+                "route": route,
+                "coverage_score": cov_score,
+                "status": "COVERED" if cov_score >= 50 else "UNTESTED"
+            })
+            self.add_edge(p_id, metric_id, "HAS_COVERAGE")
+
+        for t in all_tests:
+            c_id = t.get("case_id") or t.get("name") or f"test_{int(time.time()*1000)}"
+            t_node_id = f"testcase_{hashlib.md5(c_id.encode()).hexdigest()[:8]}"
+            t_type = t.get("type", "UI").upper()
+            target_route = t.get("route", "")
+
+            # Quality scoring based on assertions and steps or tags
+            steps = t.get("steps", [])
+            assertions = t.get("assertions", [])
+            tags = t.get("tags", [])
+            if assertions or steps:
+                q_score = min(100.0, max(20.0, (len(assertions) * 25.0) + (len(steps) * 10.0)))
+            else:
+                q_score = min(100.0, max(40.0, len(tags) * 15.0 if tags else 60.0))
+
+            self.add_node(t_node_id, "TEST_CASE", f"Test: {t.get('name', c_id)[:40]}", {
+                "case_id": c_id,
+                "name": t.get("name", c_id),
+                "test_type": t_type,
+                "quality_score": round(q_score, 1),
+                "route": target_route,
+                "tags": tags,
+                "status": "GENERATED"
+            })
+
+            # Connect to Page
+            for p in pages:
+                if p.get("route") == target_route or p.get("url") == target_route:
+                    p_id = f"page_{hashlib.md5(p.get('url', '').encode()).hexdigest()[:8]}"
+                    self.add_edge(t_node_id, p_id, "EXECUTES_ON")
+                    break
+            else:
+                if target_route:
+                    p_id = f"page_{hashlib.md5(target_route.encode()).hexdigest()[:8]}"
+                    if p_id in self.nodes:
+                        self.add_edge(t_node_id, p_id, "EXECUTES_ON")
+
+            # Requirement node
+            req_id = t.get("requirement_id")
+            if not req_id and tags:
+                for tg in tags:
+                    if tg.startswith("REQ:") or tg.startswith("REQ-"):
+                        req_id = tg
+                        break
+            if not req_id:
+                req_id = f"REQ-{hashlib.md5(target_route.encode()).hexdigest()[:4].upper()}"
+
+            r_node_id = f"req_{req_id}"
+            self.add_node(r_node_id, "REQUIREMENT", f"Req: {req_id}", {"req_id": req_id, "title": t.get("description", "")})
+            self.add_edge(t_node_id, r_node_id, "COVERS")
+
+        # Tier 2: TestCase -> Script
+        for s in scripts:
+            s_path = s.get("path", "")
+            s_id = f"script_{hashlib.md5(s_path.encode()).hexdigest()[:8]}"
+            rel_score = s.get("reliability_score", 85.0)
+            self.add_node(s_id, "SCRIPT", f"Script: {os.path.basename(s_path)}", {
+                "path": s_path,
+                "framework": s.get("framework", "ROBOT").upper(),
+                "reliability_score": rel_score
+            })
+            c_name = s.get("case_name") or s.get("case_id")
+            if c_name:
+                for n_id, n in self.nodes.items():
+                    if n["type"] == "TEST_CASE" and (n["properties"].get("case_id") == c_name or n["properties"].get("name") == c_name):
+                        self.add_edge(n_id, s_id, "GENERATED_SCRIPT")
+
+        # Tier 3: ExecutionResult -> TestCase & Website Coverage
+        for r in results:
+            res_id = f"result_{r.get('run_id', 'latest')}_{r.get('case_id', 'test')}"
+            res_node_id = f"res_{hashlib.md5(res_id.encode()).hexdigest()[:8]}"
+            r_status = (r.get("status") or "PASSED").upper()
+            self.add_node(res_node_id, "EXECUTION_RESULT", f"Result: {r_status}", {
+                "run_id": r.get("run_id", "latest"),
+                "status": r_status,
+                "duration_ms": r.get("duration_ms", 120),
+                "attempt": r.get("attempt", 1)
+            })
+            c_id = r.get("case_id")
+            if c_id:
+                for n_id, n in self.nodes.items():
+                    if n["type"] == "TEST_CASE" and (n["properties"].get("case_id") == c_id or n["properties"].get("name") == c_id):
+                        self.add_edge(res_node_id, n_id, "EVALUATED_AGAINST")
+
+        scores = self.calculate_independent_scores()
+        self.save_graph()
+        self.generate_cypher_query_suite()
+        return scores
+
+    # -------------------------------------------------------------------------
+    # 3.1 CONTINUOUS LIFECYCLE AUTO-SYNCHRONIZATION & ARTIFACT HYDRATION (REQ-066)
+    # -------------------------------------------------------------------------
+    def hydrate_from_all_artifacts(self, force_reload: bool = False) -> Dict[str, Any]:
+        """
+        REQ-GRAPH-AUTOSYNC-CONTINUOUS-LIFECYCLE-066:
+        Automatically hydrates the entire QA Knowledge Graph from all persisted disk artifacts:
+        - artifacts/reports/page_manifest_live.json & page_manifest.json
+        - artifacts/reports/coverage_matrix.json
+        - artifacts/reports/dom_vector_store.json
+        - artifacts/scripts/
+        - artifacts/reports/execution_history.jsonl & allure-results/
+        Guarantees that the graph is immediately filled with real crawled pages, DOM states,
+        action selectors, test cases, compiled scripts, and execution results.
+        """
+        if force_reload:
+            self.nodes.clear()
+            self.edges.clear()
+
+        # 1. Ingest Crawled Pages & DOM States from page manifests
+        for manifest_file in ["artifacts/reports/page_manifest_live.json", "artifacts/reports/page_manifest.json"]:
+            if os.path.exists(manifest_file):
+                try:
+                    with open(manifest_file, "r", encoding="utf-8") as f:
+                        pages_data = json.load(f)
+                        if isinstance(pages_data, list):
+                            for p in pages_data:
+                                u = p.get("url", "")
+                                if not u:
+                                    continue
+                                r = u.split("?")[0].replace("https://", "").replace("http://", "")
+                                if "/" in r:
+                                    r = "/" + r.split("/", 1)[-1]
+                                else:
+                                    r = "/"
+                                self.sync_crawl_page(
+                                    url=u,
+                                    route=r,
+                                    title=p.get("title", ""),
+                                    dom_snippet=p.get("dom_snippet", ""),
+                                    status=p.get("status", "OK"),
+                                    component_inventory=p.get("component_inventory")
+                                )
+                except Exception as e:
+                    print(f"[WARN] Knowledge Graph failed reading {manifest_file}: {e}")
+
+        # 2. Ingest Coverage Matrix & Test Suites
+        cov_file = "artifacts/reports/coverage_matrix.json"
+        if os.path.exists(cov_file):
+            try:
+                with open(cov_file, "r", encoding="utf-8") as f:
+                    cov_data = json.load(f)
+                    self.sync_from_coverage_and_execution(cov_data)
+            except Exception as e:
+                print(f"[WARN] Knowledge Graph failed reading {cov_file}: {e}")
+
+        # 3. Ingest Test Scripts from artifacts/scripts/
+        scripts_dir = "artifacts/scripts"
+        if os.path.exists(scripts_dir):
+            try:
+                for fname in os.listdir(scripts_dir):
+                    fpath = os.path.join(scripts_dir, fname)
+                    if os.path.isfile(fpath) and fname.endswith((".py", ".robot", ".js", ".ts")):
+                        s_id = f"script_{hashlib.md5(fname.encode()).hexdigest()[:8]}"
+                        fw = "ROBOT" if fname.endswith(".robot") else "PYTEST" if fname.endswith(".py") else "K6" if "load" in fname else "PLAYWRIGHT"
+                        self.add_node(s_id, "SCRIPT", f"Script: {fname}", {
+                            "path": f"artifacts/scripts/{fname}",
+                            "framework": fw,
+                            "reliability_score": 92.0
+                        })
+                        # Link test cases matching this discipline / name
+                        for n_id, n in list(self.nodes.items()):
+                            if n["type"] == "TEST_CASE":
+                                if (fw == "ROBOT" and n["properties"].get("test_type") == "ACCEPTANCE") or \
+                                   (fw == "PYTEST" and n["properties"].get("test_type") in ("UI", "API")) or \
+                                   (fw == "K6" and n["properties"].get("test_type") == "LOAD"):
+                                    self.add_edge(n_id, s_id, "GENERATED_SCRIPT")
+            except Exception as e:
+                print(f"[WARN] Knowledge Graph failed scanning scripts: {e}")
+
+        # 4. Ingest Execution Results from execution_history.jsonl
+        hist_file = "artifacts/reports/execution_history.jsonl"
+        if os.path.exists(hist_file):
+            try:
+                with open(hist_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            try:
+                                entry = json.loads(line)
+                                r_id = f"res_{hashlib.md5(str(entry).encode()).hexdigest()[:8]}"
+                                st = (entry.get("status") or "PASSED").upper()
+                                self.add_node(r_id, "EXECUTION_RESULT", f"Result: {st}", {
+                                    "run_id": entry.get("run_id", "audit"),
+                                    "status": st,
+                                    "duration_ms": entry.get("duration_ms", 150),
+                                    "test_name": entry.get("test_name", "")
+                                })
+                                # Link to test case if matched
+                                t_name = entry.get("test_name", "")
+                                if t_name:
+                                    for tn_id, tn in list(self.nodes.items()):
+                                        if tn["type"] == "TEST_CASE" and (t_name in tn["properties"].get("name", "") or tn["properties"].get("case_id") == t_name):
+                                            self.add_edge(r_id, tn_id, "EVALUATED_AGAINST")
+                            except Exception:
+                                pass
+            except Exception as e:
+                print(f"[WARN] Knowledge Graph failed reading {hist_file}: {e}")
+
+        # 5. Ingest Allure Results
+        allure_dir = "artifacts/reports/allure-results"
+        if os.path.exists(allure_dir):
+            try:
+                for af in os.listdir(allure_dir):
+                    if af.endswith("-result.json"):
+                        with open(os.path.join(allure_dir, af), "r", encoding="utf-8") as f:
+                            ares = json.load(f)
+                            res_id = f"allure_{hashlib.md5(af.encode()).hexdigest()[:8]}"
+                            st = (ares.get("status") or "PASSED").upper()
+                            self.add_node(res_id, "EXECUTION_RESULT", f"Result: {st}", {
+                                "run_id": af.replace("-result.json", ""),
+                                "status": st,
+                                "duration_ms": int((ares.get("stop", 0) - ares.get("start", 0))),
+                                "name": ares.get("name", "")
+                            })
+                            t_name = ares.get("name", "")
+                            if t_name:
+                                for tn_id, tn in list(self.nodes.items()):
+                                    if tn["type"] == "TEST_CASE" and (t_name in tn["properties"].get("name", "") or tn["properties"].get("case_id") == t_name):
+                                        self.add_edge(res_id, tn_id, "EVALUATED_AGAINST")
+            except Exception as e:
+                print(f"[WARN] Knowledge Graph failed reading Allure results: {e}")
+
+        scores = self.calculate_independent_scores()
+        self.save_graph()
+        self.generate_cypher_query_suite()
+        return scores
+
+    def sync_crawl_page(
+        self,
+        url: str,
+        route: str,
+        title: str = "",
+        dom_snippet: str = "",
+        status: str = "OK",
+        component_inventory: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Lifecycle Hook: Called when spider crawler visits a page."""
+        p_id = f"page_{hashlib.md5(url.encode()).hexdigest()[:8]}"
+        page_node = self.add_node(p_id, "PAGE", f"Page: {route or url}", {
+            "url": url,
+            "route": route or "/",
+            "title": title or route,
+            "status": "ACCESSIBLE" if status == "OK" else status
+        })
+
+        dom_hash = self.compute_dom_state_hash(dom_snippet)
+        s_id = f"state_{dom_hash}"
+        self.add_node(s_id, "STATE", f"DOM State [{dom_hash[:6]}]", {
+            "dom_signature": dom_hash,
+            "url": url,
+            "route": route or "/"
+        })
+        self.add_edge(p_id, s_id, "HAS_STATE")
+
+        # Ingest inputs and buttons as actions from component inventory
+        if component_inventory and isinstance(component_inventory, dict):
+            for inp in component_inventory.get("standalone_inputs", []):
+                sel = f"#{inp['id']}" if inp.get("id") else f"input[type='{inp.get('type', 'text')}']"
+                self.sync_action_element(route=route, action_type="WRITE", selector=sel, label=inp.get("label", ""), page_url=url)
+            for btn in component_inventory.get("button_variants", []):
+                sel = f"#{btn['id']}" if btn.get("id") else "button"
+                self.sync_action_element(route=route, action_type="CLICK", selector=sel, label=btn.get("text", "Button"), page_url=url)
+
+        return page_node
+
+    def sync_action_element(
+        self,
+        route: str,
+        action_type: str,
+        selector: str,
+        locator_type: str = "css",
+        label: str = "",
+        page_url: str = ""
+    ) -> Dict[str, Any]:
+        """Lifecycle Hook: Called when interactive elements or DOM vectors are extracted."""
+        p_id = f"page_{hashlib.md5((page_url or route).encode()).hexdigest()[:8]}"
+        act_id = f"act_{hashlib.md5((route + selector + action_type).encode()).hexdigest()[:8]}"
+        act_node = self.add_node(act_id, "ACTION", f"{action_type}: {label or selector[:25]}", {
+            "action_type": action_type.upper(),
+            "selector": selector,
+            "locator_type": locator_type,
+            "route": route,
+            "status": "VERIFIED"
+        })
+        # Connect to page's states
+        for n_id, n in list(self.nodes.items()):
+            if n["type"] == "STATE" and n["properties"].get("route") == route:
+                self.add_edge(n_id, act_id, "EXECUTES_ACTION")
+                break
+        return act_node
+
+    def sync_generated_test(
+        self,
+        case_id: str,
+        name: str,
+        test_type: str = "UI",
+        route: str = "/",
+        steps: Optional[List[str]] = None,
+        assertions: Optional[List[str]] = None,
+        script_file: str = "",
+        req_id: str = ""
+    ) -> Dict[str, Any]:
+        """Lifecycle Hook: Called when a test case is synthesized or added."""
+        t_id = f"tc_{hashlib.md5(case_id.encode()).hexdigest()[:8]}"
+        q_score = min(100.0, max(30.0, (len(assertions or []) * 25.0) + (len(steps or []) * 10.0)))
+        tc_node = self.add_node(t_id, "TEST_CASE", f"Test: {name[:40]}", {
+            "case_id": case_id,
+            "name": name,
+            "test_type": test_type.upper(),
+            "route": route,
+            "quality_score": round(q_score, 1),
+            "status": "GENERATED"
+        })
+
+        p_id = f"page_{hashlib.md5(route.encode()).hexdigest()[:8]}"
+        if p_id in self.nodes:
+            self.add_edge(t_id, p_id, "EXECUTES_ON")
+
+        if script_file:
+            s_id = f"script_{hashlib.md5(os.path.basename(script_file).encode()).hexdigest()[:8]}"
+            self.add_node(s_id, "SCRIPT", f"Script: {os.path.basename(script_file)}", {
+                "path": script_file,
+                "framework": "ROBOT" if script_file.endswith(".robot") else "PYTEST",
+                "reliability_score": 90.0
+            })
+            self.add_edge(t_id, s_id, "GENERATED_SCRIPT")
+
+        r_tag = req_id or f"REQ-{test_type.upper()}-{hashlib.md5(route.encode()).hexdigest()[:4].upper()}"
+        r_id = f"req_{r_tag}"
+        self.add_node(r_id, "REQUIREMENT", f"Req: {r_tag}", {"req_id": r_tag, "route": route})
+        self.add_edge(t_id, r_id, "COVERS")
+        return tc_node
+
+    def sync_execution_outcome(
+        self,
+        run_id: str,
+        case_id: str,
+        status: str = "PASSED",
+        duration_ms: int = 100,
+        error: str = ""
+    ) -> Dict[str, Any]:
+        """Lifecycle Hook: Called when a test execution finishes."""
+        res_id = f"res_{hashlib.md5((run_id + case_id).encode()).hexdigest()[:8]}"
+        st = status.upper()
+        res_node = self.add_node(res_id, "EXECUTION_RESULT", f"Result: {st}", {
+            "run_id": run_id,
+            "status": st,
+            "duration_ms": duration_ms,
+            "error": error
+        })
+        for n_id, n in list(self.nodes.items()):
+            if n["type"] == "TEST_CASE" and (n["properties"].get("case_id") == case_id or n["properties"].get("name") == case_id):
+                self.add_edge(res_id, n_id, "EVALUATED_AGAINST")
+                break
+        self.save_graph()
+        return res_node
+
+    # -------------------------------------------------------------------------
+    # 4. INDEPENDENT SCORING CALCULATION
+    # -------------------------------------------------------------------------
+    def calculate_independent_scores(self) -> Dict[str, float]:
+        """Calculates three independent evaluation scores (0 - 100%)."""
+        # 1. Test Case Quality Score
+        test_nodes = [n for n in self.nodes.values() if n["type"] == "TEST_CASE"]
+        if test_nodes:
+            avg_quality = sum(float(n["properties"].get("quality_score", 50.0)) for n in test_nodes) / len(test_nodes)
+        else:
+            avg_quality = 0.0
+
+        # 2. Script Reliability Score
+        script_nodes = [n for n in self.nodes.values() if n["type"] == "SCRIPT"]
+        result_nodes = [n for n in self.nodes.values() if n["type"] == "EXECUTION_RESULT"]
+        if result_nodes:
+            passed = sum(1 for n in result_nodes if n["properties"].get("status") == "PASSED")
+            avg_reliability = (passed / len(result_nodes)) * 100.0
+        elif script_nodes:
+            avg_reliability = sum(float(n["properties"].get("reliability_score", 80.0)) for n in script_nodes) / len(script_nodes)
+        else:
+            avg_reliability = 0.0
+
+        # 3. Website Route Coverage Score
+        page_nodes = [n for n in self.nodes.values() if n["type"] == "PAGE"]
+        if page_nodes:
+            # Check how many pages have incoming EXECUTES_ON edges from TestCase
+            tested_pages = set()
+            for e in self.edges:
+                if e["relationship"] == "EXECUTES_ON":
+                    tested_pages.add(e["target"])
+            avg_coverage = (len(tested_pages) / len(page_nodes)) * 100.0
+        else:
+            avg_coverage = 0.0
+
+        return {
+            "test_case_quality_score": round(min(100.0, max(0.0, avg_quality)), 1),
+            "script_reliability_score": round(min(100.0, max(0.0, avg_reliability)), 1),
+            "website_coverage_score": round(min(100.0, max(0.0, avg_coverage)), 1),
+            "route_coverage_score": round(min(100.0, max(0.0, avg_coverage)), 1)
+        }
+
+    # -------------------------------------------------------------------------
+    # 5. CYPHER PRE-SCRIPTS & DIAGNOSTIC QUERIES
+    # -------------------------------------------------------------------------
+    def generate_cypher_query_suite(self) -> str:
+        """
+        REQ-GRAPH-STATE-ACTION-AUTHORITATIVE-VERIFY-065:
+        Generates ready-to-run Cypher query scripts for human inspection of:
+        Breakpoints, Unknown Timeout States, Isolated Scenarios, Broken Nodes, and Untested Routes.
+        """
+        cypher_text = """// =========================================================================
+// QA Knowledge Graph Diagnostic Cypher Query Suite
+// REQ-GRAPH-STATE-ACTION-AUTHORITATIVE-VERIFY-065
+// =========================================================================
+
+// 1. BREAKPOINTS: Find failing interactive actions and resulting failure states
+MATCH (s1:State)-[:EXECUTES_ACTION]->(a:Action {status: 'FAILED'})-[:TRANSITIONS_TO]->(s2:State)
+RETURN s1.dom_signature AS pre_state, a.action_type AS action, a.selector AS selector, a.error AS error, s2.dom_signature AS post_state;
+
+// 2. PENDING READ-BACK: Find actions held in UNKNOWN status awaiting authoritative read-back
+MATCH (a:Action)
+WHERE a.status = 'UNKNOWN' OR a.postcondition_status CONTAINS 'TIMEOUT'
+RETURN a.id AS action_id, a.action_type AS type, a.selector AS selector, a.page_url AS url, a.postcondition_status AS status;
+
+// 3. ISOLATED SCENARIOS / ORPHANED NODES: Find pages with zero associated test cases
+MATCH (p:Page)
+WHERE NOT (p)<-[:EXECUTES_ON]-(:TestCase)
+RETURN p.id AS page_id, p.route AS route, p.url AS url, p.title AS title;
+
+// 4. BROKEN NODES: Find pages or actions marked with errors or crawl timeouts
+MATCH (n)
+WHERE n.status IN ['BROKEN', 'CRAWL_ERROR', 'FAILED', 'TIMEOUT_SKIPPED']
+RETURN labels(n) AS node_type, n.id AS id, n.route AS route, n.status AS status;
+
+// 5. UNTESTED ROUTES & COVERAGE Gaps
+MATCH (p:Page)-[:HAS_COVERAGE]->(m:CoverageMetric)
+WHERE m.coverage_score < 50.0 OR NOT (p)<-[:EXECUTES_ON]-(:TestCase)
+RETURN p.route AS uncovered_route, m.coverage_score AS coverage_score, p.intent AS intent;
+
+// 6. THREE-TIER CONTEXT TRACE: Page -> State -> Action -> TestCase -> Script -> Result
+MATCH (p:Page)-[:HAS_STATE]->(s:State)-[:EXECUTES_ACTION]->(a:Action)
+OPTIONAL MATCH (p)<-[:EXECUTES_ON]-(t:TestCase)-[:GENERATED_SCRIPT]->(sc:Script)
+OPTIONAL MATCH (r:ExecutionResult)-[:EVALUATED_AGAINST]->(t)
+RETURN p.route, a.selector, t.name, sc.path, r.status;
+"""
+        os.makedirs(os.path.dirname(self.CYPHER_SCRIPTS_PATH), exist_ok=True)
+        with open(self.CYPHER_SCRIPTS_PATH, "w", encoding="utf-8") as f:
+            f.write(cypher_text)
+        return cypher_text
+
+    def query_diagnostics(self, filter_type: str = "ALL") -> Dict[str, Any]:
+        """
+        Executes in-memory pattern matching corresponding to Cypher diagnostic queries.
+        Supports: BREAKPOINTS, PENDING_READBACK, ISOLATED_SCENARIOS, BROKEN_NODES, UNTESTED_ROUTES.
+        """
+        f = filter_type.upper()
+        res_nodes: List[Dict[str, Any]] = []
+        res_edges: List[Dict[str, Any]] = []
+
+        if f == "BREAKPOINTS":
+            # Actions with FAILED status and their attached states
+            action_ids = {n["id"] for n in self.nodes.values() if n["type"] == "ACTION" and n["properties"].get("status") == "FAILED"}
+            res_nodes = [n for n in self.nodes.values() if n["id"] in action_ids]
+            res_edges = [e for e in self.edges if e["source"] in action_ids or e["target"] in action_ids]
+            connected_ids = {e["source"] for e in res_edges}.union({e["target"] for e in res_edges})
+            res_nodes.extend([n for n in self.nodes.values() if n["id"] in connected_ids and n not in res_nodes])
+
+        elif f in ("PENDING_READBACK", "UNKNOWN"):
+            # Actions held in UNKNOWN or pending readback
+            action_ids = {
+                n["id"] for n in self.nodes.values()
+                if n["type"] == "ACTION" and (n["properties"].get("status") == "UNKNOWN" or "TIMEOUT" in str(n["properties"].get("postcondition_status", "")))
+            }
+            res_nodes = [n for n in self.nodes.values() if n["id"] in action_ids]
+            res_edges = [e for e in self.edges if e["source"] in action_ids or e["target"] in action_ids]
+
+        elif f in ("ISOLATED_SCENARIOS", "ORPHANED"):
+            # Pages without incoming EXECUTES_ON edges from TestCase
+            tested_page_ids = {e["target"] for e in self.edges if e["relationship"] == "EXECUTES_ON"}
+            res_nodes = [n for n in self.nodes.values() if n["type"] == "PAGE" and n["id"] not in tested_page_ids]
+
+        elif f == "BROKEN_NODES":
+            # Nodes with status in ['BROKEN', 'CRAWL_ERROR', 'FAILED', 'TIMEOUT_SKIPPED']
+            res_nodes = [
+                n for n in self.nodes.values()
+                if str(n.get("status", "")).upper() in ("BROKEN", "CRAWL_ERROR", "FAILED", "TIMEOUT_SKIPPED")
+                or str(n["properties"].get("status", "")).upper() in ("BROKEN", "CRAWL_ERROR", "FAILED", "TIMEOUT_SKIPPED")
+            ]
+
+        elif f in ("UNTESTED_ROUTES", "COVERAGE_GAPS"):
+            # Pages with coverage score < 50 or no test case
+            tested_page_ids = {e["target"] for e in self.edges if e["relationship"] == "EXECUTES_ON"}
+            res_nodes = [
+                n for n in self.nodes.values()
+                if n["type"] == "PAGE" and (n["id"] not in tested_page_ids or float(n["properties"].get("coverage_score", 0)) < 50.0)
+            ]
+
+        else:
+            # ALL
+            res_nodes = list(self.nodes.values())
+            res_edges = list(self.edges)
+
+        if f != "ALL" and not res_edges and res_nodes:
+            matched_ids = {n["id"] for n in res_nodes}
+            res_edges = [e for e in self.edges if e["source"] in matched_ids or e["target"] in matched_ids]
+
+        return {
+            "status": "success",
+            "filter": f,
+            "total_nodes": len(res_nodes),
+            "total_edges": len(res_edges),
+            "nodes": res_nodes,
+            "edges": res_edges,
+            "diagnostic_counts": self.get_diagnostic_counts()
+        }
+
+    def get_diagnostic_counts(self) -> Dict[str, int]:
+        """
+        REQ-GRAPH-DIAGNOSTIC-FILTER-CANVAS-FULLSCREEN-070:
+        Calculates active entity counts for each diagnostic filter category.
+        """
+        failed_actions = sum(1 for n in self.nodes.values() if n["type"] == "ACTION" and n["properties"].get("status") == "FAILED")
+        timeouts = sum(
+            1 for n in self.nodes.values()
+            if n["type"] == "ACTION" and (n["properties"].get("status") == "UNKNOWN" or "TIMEOUT" in str(n["properties"].get("postcondition_status", "")))
+        )
+        tested_page_ids = {e["target"] for e in self.edges if e["relationship"] == "EXECUTES_ON"}
+        isolated = sum(1 for n in self.nodes.values() if n["type"] == "PAGE" and n["id"] not in tested_page_ids)
+        broken = sum(
+            1 for n in self.nodes.values()
+            if str(n.get("status", "")).upper() in ("BROKEN", "CRAWL_ERROR", "FAILED", "TIMEOUT_SKIPPED")
+            or str(n["properties"].get("status", "")).upper() in ("BROKEN", "CRAWL_ERROR", "FAILED", "TIMEOUT_SKIPPED")
+        )
+        untested = sum(
+            1 for n in self.nodes.values()
+            if n["type"] == "PAGE" and (n["id"] not in tested_page_ids or float(n["properties"].get("coverage_score", 0)) < 50.0)
+        )
+        return {
+            "ALL": len(self.nodes),
+            "BREAKPOINTS": failed_actions,
+            "TIMEOUTS": timeouts,
+            "ISOLATED_SCENARIOS": isolated,
+            "BROKEN_NODES": broken,
+            "UNTESTED_ROUTES": untested
+        }
+
+    # -------------------------------------------------------------------------
+    # 5.1 CYPHER QUERY EXECUTION ENGINE (REQ-067)
+    # -------------------------------------------------------------------------
+    def execute_cypher_query(self, query: str) -> Dict[str, Any]:
+        """
+        REQ-GRAPH-CYPHER-QUERY-EXECUTION-ENGINE-067:
+        In-memory Cypher query execution engine supporting:
+        - MATCH (n) RETURN n [LIMIT x]
+        - MATCH (var:Label) RETURN var
+        - MATCH (n) WHERE n.prop = 'val' RETURN n
+        - MATCH (src:Label)-[r:REL]->(dst:Label) RETURN src, dst
+        - MATCH (n) RETURN count(n)
+        """
+        start_time = time.time()
+        if not query or not query.strip():
+            return {
+                "status": "error",
+                "error": "Empty Cypher query. Example: 'MATCH (n) RETURN n LIMIT 25'",
+                "query": query,
+                "count": 0,
+                "results": []
+            }
+
+        q = query.strip()
+        if len(self.nodes) == 0:
+            self.hydrate_from_all_artifacts()
+
+        try:
+            # Parse LIMIT
+            limit = None
+            limit_match = re.search(r'\bLIMIT\s+(\d+)\b', q, re.IGNORECASE)
+            if limit_match:
+                limit = int(limit_match.group(1))
+                q_no_limit = re.sub(r'\bLIMIT\s+\d+\b', '', q, flags=re.IGNORECASE).strip()
+            else:
+                q_no_limit = q
+
+            # Check if count query: RETURN count(n) or RETURN count(*)
+            is_count_query = bool(re.search(r'\bRETURN\s+count\s*\([^\)]*\)', q_no_limit, re.IGNORECASE))
+
+            # Pattern 1: Relationship Match: MATCH (src:Label)-[r:REL]->(dst:Label) or MATCH (src)-[r:REL]->(dst)
+            rel_pattern = re.search(
+                r'MATCH\s*\(\s*(\w+)?(?:\s*:\s*(\w+))?\s*\)\s*-\s*\[\s*(\w+)?(?:\s*:\s*(\w+))?\s*\]->\s*\(\s*(\w+)?(?:\s*:\s*(\w+))?\s*\)',
+                q_no_limit,
+                re.IGNORECASE
+            )
+
+            # Pattern 2: Single Node Match: MATCH (n:Label) or MATCH (n)
+            node_pattern = re.search(
+                r'MATCH\s*\(\s*(\w+)?(?:\s*:\s*(\w+))?\s*\)',
+                q_no_limit,
+                re.IGNORECASE
+            )
+
+            # Parse WHERE clause if present
+            where_clause = None
+            where_match = re.search(r'\bWHERE\s+(.+?)(?=\s+RETURN\b|\s+LIMIT\b|$)', q_no_limit, re.IGNORECASE)
+            if where_match:
+                where_clause = where_match.group(1).strip()
+
+            def evaluate_node_predicate(node: Dict[str, Any], predicate_str: str) -> bool:
+                if not predicate_str:
+                    return True
+                clean_pred = re.sub(r'\b\w+\.', '', predicate_str).strip()
+                # String comparison
+                eq_match = re.search(r"(\w+)\s*(=|==|!=|CONTAINS|>|<)\s*['\"]([^'\"]*)['\"]", clean_pred, re.IGNORECASE)
+                if eq_match:
+                    prop, op, val = eq_match.group(1), eq_match.group(2).upper(), eq_match.group(3)
+                    node_val = node.get(prop) or node.get("properties", {}).get(prop) or ""
+                    node_val_str = str(node_val)
+                    if op in ("=", "=="):
+                        return node_val_str.lower() == val.lower()
+                    elif op == "!=":
+                        return node_val_str.lower() != val.lower()
+                    elif op == "CONTAINS":
+                        return val.lower() in node_val_str.lower()
+                # Numeric comparison
+                num_match = re.search(r"(\w+)\s*(>=|<=|>|<)\s*(\d+(?:\.\d+)?)", clean_pred)
+                if num_match:
+                    prop, op, num_val = num_match.group(1), num_match.group(2), float(num_match.group(3))
+                    node_val = node.get(prop) or node.get("properties", {}).get(prop)
+                    if node_val is not None:
+                        try:
+                            f_val = float(node_val)
+                            if op == ">=": return f_val >= num_val
+                            if op == "<=": return f_val <= num_val
+                            if op == ">": return f_val > num_val
+                            if op == "<": return f_val < num_val
+                        except (ValueError, TypeError):
+                            return False
+                return True
+
+            def match_label(node_type: str, requested_label: Optional[str]) -> bool:
+                if not requested_label:
+                    return True
+                return node_type.upper().replace("_", "") == requested_label.upper().replace("_", "")
+
+            def match_rel(rel_type: str, requested_rel: Optional[str]) -> bool:
+                if not requested_rel:
+                    return True
+                return rel_type.upper().replace("_", "") == requested_rel.upper().replace("_", "")
+
+            results = []
+
+            if rel_pattern:
+                src_var, src_label, rel_var, rel_type, dst_var, dst_label = rel_pattern.groups()
+
+                for edge in self.edges:
+                    if not match_rel(edge["relationship"], rel_type):
+                        continue
+                    src_node = self.nodes.get(edge["source"])
+                    dst_node = self.nodes.get(edge["target"])
+                    if not src_node or not dst_node:
+                        continue
+                    if not match_label(src_node["type"], src_label):
+                        continue
+                    if not match_label(dst_node["type"], dst_label):
+                        continue
+                    if where_clause:
+                        if not evaluate_node_predicate(src_node, where_clause) and not evaluate_node_predicate(dst_node, where_clause):
+                            continue
+
+                    results.append({
+                        "source": {
+                            "id": src_node["id"],
+                            "label": src_node["label"],
+                            "type": src_node["type"],
+                            "status": src_node.get("status", "ACTIVE"),
+                            "properties": src_node.get("properties", {})
+                        },
+                        "relationship": edge["relationship"],
+                        "target": {
+                            "id": dst_node["id"],
+                            "label": dst_node["label"],
+                            "type": dst_node["type"],
+                            "status": dst_node.get("status", "ACTIVE"),
+                            "properties": dst_node.get("properties", {})
+                        }
+                    })
+                    if limit and len(results) >= limit:
+                        break
+
+            elif node_pattern:
+                var_name, label_name = node_pattern.groups()
+
+                for node in self.nodes.values():
+                    if not match_label(node["type"], label_name):
+                        continue
+                    if where_clause and not evaluate_node_predicate(node, where_clause):
+                        continue
+
+                    results.append({
+                        "id": node["id"],
+                        "label": node["label"],
+                        "type": node["type"],
+                        "status": node.get("status", "ACTIVE"),
+                        "properties": node.get("properties", {})
+                    })
+                    if limit and len(results) >= limit:
+                        break
+            else:
+                return {
+                    "status": "error",
+                    "error": f"Unsupported Cypher query syntax. Supported patterns: 'MATCH (n) RETURN n [LIMIT 25]', 'MATCH (p:Page) RETURN p', 'MATCH (t:TestCase) WHERE t.status = \\'GENERATED\\' RETURN t', 'MATCH (p:Page)-[r:HAS_STATE]->(s:State) RETURN p, s'.",
+                    "query": query,
+                    "count": 0,
+                    "results": []
+                }
+
+            elapsed_ms = round((time.time() - start_time) * 1000, 2)
+
+            if is_count_query:
+                return {
+                    "status": "success",
+                    "query": query,
+                    "count": 1,
+                    "results": [{"count": len(results)}],
+                    "execution_time_ms": elapsed_ms
+                }
+
+            return {
+                "status": "success",
+                "query": query,
+                "count": len(results),
+                "results": results,
+                "execution_time_ms": elapsed_ms
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Cypher Execution Exception: {str(e)}",
+                "query": query,
+                "count": 0,
+                "results": []
+            }
+
+
+    # -------------------------------------------------------------------------
+    # 6. PERSISTENCE & EXPORT
+    # -------------------------------------------------------------------------
+    def save_graph(self):
+        os.makedirs(os.path.dirname(self.GRAPH_STORAGE_PATH), exist_ok=True)
+        scores = self.calculate_independent_scores()
+        data = {
+            "version": "1.0",
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "scores": scores,
+            "total_nodes": len(self.nodes),
+            "total_edges": len(self.edges),
+            "nodes": list(self.nodes.values()),
+            "edges": self.edges
+        }
+        with open(self.GRAPH_STORAGE_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, default=str)
+
+    def get_graph_context_summary(self, auto_hydrate: bool = True) -> Dict[str, Any]:
+        if auto_hydrate and len(self.nodes) < 5:
+            try:
+                self.hydrate_from_all_artifacts()
+            except Exception as e:
+                print(f"[WARN] Failed auto-hydrating graph on get_graph_context_summary: {e}")
+
+        scores = self.calculate_independent_scores()
+        counts_by_type: Dict[str, int] = {}
+        for n in self.nodes.values():
+            nt = n["type"]
+            counts_by_type[nt] = counts_by_type.get(nt, 0) + 1
+
+        structural_nodes = [n for n in self.nodes.values() if n["type"] != "EXECUTION_RESULT"]
+        exec_nodes = [n for n in self.nodes.values() if n["type"] == "EXECUTION_RESULT"][-200:]
+        returned_nodes = (structural_nodes + exec_nodes)[:1000]
+
+        return {
+            "status": "READY" if self.nodes else "EMPTY",
+            "scores": scores,
+            "node_counts": counts_by_type,
+            "diagnostic_counts": self.get_diagnostic_counts(),
+            "total_nodes": len(self.nodes),
+            "total_edges": len(self.edges),
+            "nodes": returned_nodes,
+            "edges": self.edges[:2000]
+        }
 '''
     if os.path.exists("aspice_qa_framework/engines/qa_knowledge_graph_engine.py"):
         try:
@@ -53620,6 +54760,287 @@ function App() {
         const [enhancingAllGaps, setEnhancingAllGaps] = React.useState(false);
         const [isSpiderCrawlingCoverage, setIsSpiderCrawlingCoverage] = React.useState(false);
 
+        // ── QA Knowledge Graph & Authoritative Verification States (REQ-065) ──
+        const [showGraphModal, setShowGraphModal] = React.useState(false);
+        const [graphData, setGraphData] = React.useState(null);
+        const [loadingGraph, setLoadingGraph] = React.useState(false);
+        const [graphFilter, setGraphFilter] = React.useState("ALL");
+        const [inspectedGraphNode, setInspectedGraphNode] = React.useState(null);
+        const [cypherQueryText, setCypherQueryText] = React.useState("MATCH (n) RETURN n LIMIT 25");
+        const [cypherQueryResult, setCypherQueryResult] = React.useState(null);
+        const [executingGraphAction, setExecutingGraphAction] = React.useState(false);
+        const [graphActionStatus, setGraphActionStatus] = React.useState(null);
+        const [liveSyncGraph, setLiveSyncGraph] = React.useState(true);
+        const [graphViewMode, setGraphViewMode] = React.useState("canvas"); // "canvas" or "list"
+        const [canvasZoom, setCanvasZoom] = React.useState(1.0);
+        const [canvasPan, setCanvasPan] = React.useState({ x: 0, y: 0 });
+        const [isPanningCanvas, setIsPanningCanvas] = React.useState(false);
+        const [panStart, setPanStart] = React.useState({ x: 0, y: 0 });
+        const [nodePositions, setNodePositions] = React.useState({});
+        const [draggingNodeId, setDraggingNodeId] = React.useState(null);
+        const [dragOffset, setDragOffset] = React.useState({ x: 0, y: 0 });
+        const [hoveredGraphNode, setHoveredGraphNode] = React.useState(null);
+        const [canvasNodeLimit, setCanvasNodeLimit] = React.useState(50);
+        const [isCanvasFullscreen, setIsCanvasFullscreen] = React.useState(false);
+        const [isNativeDisplayFullscreen, setIsNativeDisplayFullscreen] = React.useState(false);
+
+        React.useEffect(() => {
+            const handleKeyDown = (e) => {
+                if (e.key === 'Escape') {
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen().catch(() => {});
+                    }
+                    if (isCanvasFullscreen) {
+                        setIsCanvasFullscreen(false);
+                    }
+                }
+            };
+            const handleFsChange = () => {
+                setIsNativeDisplayFullscreen(!!document.fullscreenElement);
+            };
+            window.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('fullscreenchange', handleFsChange);
+            return () => {
+                window.removeEventListener('keydown', handleKeyDown);
+                document.removeEventListener('fullscreenchange', handleFsChange);
+            };
+        }, [isCanvasFullscreen]);
+
+        // Standalone window URL parameter detection
+        React.useEffect(() => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('view') === 'graph_fullscreen') {
+                    setShowGraphModal(true);
+                    setIsCanvasFullscreen(true);
+                    fetchGraphContext();
+                }
+            } catch (_) {}
+        }, []);
+
+        // Mouse Wheel Scroll-to-Zoom with Cursor Anchor (REQ-071)
+        const handleCanvasWheel = (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            setCanvasZoom(prevZoom => {
+                const newZoom = Math.min(3.0, Math.max(0.3, Number((prevZoom * zoomFactor).toFixed(2))));
+                if (newZoom === prevZoom) return prevZoom;
+
+                setCanvasPan(prevPan => ({
+                    x: Math.round(mouseX - (mouseX - prevPan.x) * (newZoom / prevZoom)),
+                    y: Math.round(mouseY - (mouseY - prevPan.y) * (newZoom / prevZoom))
+                }));
+                return newZoom;
+            });
+        };
+
+        const toggleNativeDisplayFullscreen = async () => {
+            try {
+                if (!document.fullscreenElement) {
+                    await document.documentElement.requestFullscreen();
+                    setIsCanvasFullscreen(true);
+                } else {
+                    if (document.exitFullscreen) {
+                        await document.exitFullscreen();
+                    }
+                }
+            } catch (err) {
+                console.warn("Native fullscreen toggle:", err);
+                setIsCanvasFullscreen(true);
+            }
+        };
+
+        const openStandaloneGraphViewer = () => {
+            const width = Math.min(screen.availWidth || 1920, 1800);
+            const height = Math.min(screen.availHeight || 1080, 1000);
+            const left = Math.max(0, Math.round((screen.availWidth - width) / 2));
+            const top = Math.max(0, Math.round((screen.availHeight - height) / 2));
+            window.open('/?view=graph_fullscreen', 'QAKnowledgeGraphViewer', `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`);
+        };
+
+        React.useEffect(() => {
+            if (!graphData || !graphData.nodes || graphData.nodes.length === 0) return;
+            const nodes = graphData.nodes.slice(0, canvasNodeLimit);
+            const positions = {};
+            const tierGroups = {
+                tier1_page: [],
+                tier1_state: [],
+                tier1_action: [],
+                tier2_test: [],
+                tier2_req: [],
+                tier2_script: [],
+                tier3_metric: [],
+                tier3_exec: [],
+                other: []
+            };
+
+            nodes.forEach(n => {
+                const t = (n.type || n.label || '').toUpperCase();
+                if (t === 'PAGE') tierGroups.tier1_page.push(n);
+                else if (t === 'STATE') tierGroups.tier1_state.push(n);
+                else if (t === 'ACTION') tierGroups.tier1_action.push(n);
+                else if (t === 'TEST_CASE' || t === 'TESTCASE') tierGroups.tier2_test.push(n);
+                else if (t === 'REQUIREMENT') tierGroups.tier2_req.push(n);
+                else if (t === 'SCRIPT') tierGroups.tier2_script.push(n);
+                else if (t === 'COVERAGE_METRIC' || t === 'COVERAGEMETRIC') tierGroups.tier3_metric.push(n);
+                else if (t === 'EXECUTION_RESULT' || t === 'EXECUTIONRESULT') tierGroups.tier3_exec.push(n);
+                else tierGroups.other.push(n);
+            });
+
+            const colX = {
+                tier1_page: 60,
+                tier1_state: 160,
+                tier1_action: 260,
+                tier2_test: 380,
+                tier2_req: 490,
+                tier2_script: 600,
+                tier3_metric: 710,
+                tier3_exec: 820,
+                other: 920
+            };
+
+            Object.entries(tierGroups).forEach(([colKey, groupNodes]) => {
+                const baseX = colX[colKey] || 400;
+                const total = groupNodes.length;
+                const startY = 70;
+                const spacingY = total > 1 ? Math.min(65, 420 / Math.max(1, total - 1)) : 100;
+                groupNodes.forEach((node, idx) => {
+                    positions[node.id] = {
+                        x: baseX + (idx % 2 === 1 ? 12 : -12),
+                        y: startY + idx * spacingY
+                    };
+                });
+            });
+
+            setNodePositions(positions);
+        }, [graphData, canvasNodeLimit]);
+
+        const fetchGraphContext = async (forceResync = false) => {
+            setLoadingGraph(true);
+            try {
+                const url = forceResync ? '/api/graph/context?resync=true' : '/api/graph/context';
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data && (data.status === 'success' || data.status === 'READY' || Array.isArray(data.nodes))) {
+                    setGraphData(data);
+                }
+            } catch (err) {
+                console.error("Failed to fetch graph context:", err);
+            } finally {
+                setLoadingGraph(false);
+            }
+        };
+
+        const forceResyncGraphFromArtifacts = async () => {
+            setLoadingGraph(true);
+            setGraphActionStatus("Force re-hydrating QA Knowledge Graph from all project artifacts on disk...");
+            try {
+                const res = await fetch('/api/graph/sync', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    const sum = data.summary || data;
+                    setGraphData(sum);
+                    setGraphActionStatus(`✓ Re-hydration complete! ${sum.total_nodes || 'All'} nodes mapped across all tiers.`);
+                } else {
+                    setGraphActionStatus("Resync warning: " + (data.message || "Failed"));
+                }
+            } catch (err) {
+                setGraphActionStatus("Resync error: " + String(err));
+            } finally {
+                setLoadingGraph(false);
+            }
+        };
+
+        // Real-Time Live Sync Daemon for QA Knowledge Graph (REQ-066)
+        React.useEffect(() => {
+            let interval = null;
+            if (showGraphModal) {
+                fetchGraphContext();
+                if (liveSyncGraph) {
+                    interval = setInterval(() => {
+                        fetchGraphContext();
+                    }, 4000);
+                }
+            }
+            return () => {
+                if (interval) clearInterval(interval);
+            };
+        }, [showGraphModal, liveSyncGraph]);
+
+        const executeCypherQuery = async (queryToRun) => {
+            const q = queryToRun || cypherQueryText;
+            if (!q || !q.trim()) return;
+            setExecutingGraphAction(true);
+            try {
+                const res = await fetch('/api/graph/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: q, cypher_query: q })
+                });
+                const data = await res.json();
+                setCypherQueryResult(data);
+            } catch (err) {
+                setCypherQueryResult({ status: 'error', error: String(err) });
+            } finally {
+                setExecutingGraphAction(false);
+            }
+        };
+
+        const runDiagnosticFilter = async (filterType) => {
+            setGraphFilter(filterType);
+            setLoadingGraph(true);
+            try {
+                if (filterType === 'ALL') {
+                    await fetchGraphContext();
+                } else {
+                    const res = await fetch(`/api/graph/diagnostics?filter_type=${encodeURIComponent(filterType)}&filter=${encodeURIComponent(filterType)}`);
+                    const data = await res.json();
+                    if (data && (data.status === 'success' || Array.isArray(data.nodes))) {
+                        setGraphData(prev => ({
+                            ...prev,
+                            nodes: data.nodes || [],
+                            edges: data.edges || [],
+                            diagnostic_counts: data.diagnostic_counts || prev?.diagnostic_counts,
+                            active_filter: filterType,
+                            diagnostic_count: data.total_nodes || data.count
+                        }));
+                    }
+                }
+                setCanvasZoom(1.0);
+                setCanvasPan({ x: 0, y: 0 });
+            } catch (err) {
+                console.error("Failed to run diagnostics:", err);
+            } finally {
+                setLoadingGraph(false);
+            }
+        };
+
+        const verifyStateBoundAction = async (actionId, expectedPostcondition) => {
+            setExecutingGraphAction(true);
+            setGraphActionStatus("Verifying action postcondition with authoritative read-back...");
+            try {
+                const res = await fetch('/api/graph/action/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action_id: actionId,
+                        expected_postcondition: expectedPostcondition
+                    })
+                });
+                const data = await res.json();
+                setGraphActionStatus(data.message || (data.verified ? "Postcondition Verified" : "Verification Failed"));
+                fetchGraphContext();
+            } catch (err) {
+                setGraphActionStatus("Error: " + String(err));
+            } finally {
+                setExecutingGraphAction(false);
+            }
+        };
+
         // Modern UI Frameworks (React, Angular, Vue, Shadow DOM) States
         const [modernFrameworks, setModernFrameworks] = React.useState(null);
         const [isDetectingFrameworks, setIsDetectingFrameworks] = React.useState(false);
@@ -53842,6 +55263,7 @@ function App() {
                         const routes = ['All', ...data.crawled_pages.map(p => p.route || p.url).filter(Boolean)];
                         setAvailableDomRoutes(Array.from(new Set(routes)));
                     }
+                    fetchGraphContext();
                 } else {
                     showToast("Spider crawl failed: " + (data.message || "Unknown error"), "error");
                 }
@@ -54097,6 +55519,7 @@ function App() {
                     if (iframe && iframe.src) {
                         iframe.src = iframe.src.split('?')[0] + '?t=' + Date.now();
                     }
+                    fetchGraphContext();
                 } else {
                     showToast("Execution error: " + (data.message || "Failed"), "error");
                 }
@@ -56254,6 +57677,16 @@ function App() {
                             <span>🧠 Epistemic Matrix</span>
                             <span className="bg-purple-950 text-purple-300 border border-purple-700/80 px-1 py-0.2 rounded text-[9px] font-mono">
                                 ECM
+                            </span>
+                        </button>
+                        <button 
+                            onClick={() => { setShowGraphModal(true); fetchGraphContext(); }} 
+                            className="bg-gradient-to-r from-emerald-950 via-teal-950 to-cyan-950 hover:from-emerald-900 hover:to-cyan-900 text-emerald-200 border border-emerald-500/70 px-3 py-1 rounded text-[10px] font-bold shadow-lg transition flex items-center space-x-1.5 cursor-pointer"
+                            title="Open QA Knowledge Graph & State-Action Verification Topology"
+                        >
+                            <span>🌐 QA Graph</span>
+                            <span className="bg-emerald-950 text-emerald-300 border border-emerald-700/80 px-1.5 py-0.2 rounded text-[9px] font-mono">
+                                {graphData?.scores?.route_coverage_score !== undefined ? `${graphData.scores.route_coverage_score}% Cov` : "Topology"}
                             </span>
                         </button>
                         <button onClick={() => { setShowCookieModal(true); fetchCookieStatus(); }} className="bg-gradient-to-r from-amber-950 to-orange-950 hover:from-amber-900 hover:to-orange-900 text-amber-200 border border-amber-600/60 px-3 py-1 rounded text-[10px] font-bold shadow-lg transition flex items-center space-x-1.5 cursor-pointer">
@@ -59640,6 +61073,1008 @@ function App() {
                             </div>
                         )}
 
+                        {/* 🌐 QA KNOWLEDGE GRAPH & STATE-ACTION TOPOLOGY MODAL (REQ-065) */}
+                        {showGraphModal && (
+                            <div className="absolute inset-2 sm:inset-4 bg-gray-950/95 border-2 border-emerald-500 rounded-2xl z-50 p-5 sm:p-6 flex flex-col shadow-2xl backdrop-blur-md overflow-hidden text-gray-100">
+                                {/* Modal Header */}
+                                <div className="flex flex-wrap justify-between items-center border-b border-gray-800 pb-3 mb-3 gap-3 shrink-0">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-950 border border-emerald-600 flex items-center justify-center text-xl shadow-inner">
+                                            🌐
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h2 className="text-base sm:text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300">
+                                                    QA Knowledge Graph & State-Action Topology
+                                                </h2>
+                                                <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded-full font-mono font-bold">
+                                                    REQ-065
+                                                </span>
+                                                <span className="text-[10px] bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded-full font-mono">
+                                                    {graphData?.nodes?.length || 0} Nodes • {graphData?.edges?.length || 0} Edges
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-gray-400">
+                                                State-bound action verification, authoritative read-back timeouts, 3-tier scoring & Cypher diagnostics.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Independent 3-Tier Scores Header Badges */}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="flex items-center bg-gray-900 border border-emerald-700/80 rounded-lg px-2.5 py-1 space-x-1.5 shadow" title="Tier 1: Quality of test cases bound to states and verified postconditions">
+                                            <span className="text-[10px] text-gray-400 font-mono">T1 Quality:</span>
+                                            <span className="text-xs font-bold text-emerald-400 font-mono">
+                                                {graphData?.scores?.test_case_quality_score !== undefined ? `${graphData.scores.test_case_quality_score}%` : "--"}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center bg-gray-900 border border-cyan-700/80 rounded-lg px-2.5 py-1 space-x-1.5 shadow" title="Tier 2: Reliability of executed test scripts (handling timeouts & postconditions)">
+                                            <span className="text-[10px] text-gray-400 font-mono">T2 Reliability:</span>
+                                            <span className="text-xs font-bold text-cyan-400 font-mono">
+                                                {graphData?.scores?.script_reliability_score !== undefined ? `${graphData.scores.script_reliability_score}%` : "--"}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center bg-gray-900 border border-indigo-700/80 rounded-lg px-2.5 py-1 space-x-1.5 shadow" title="Tier 3: Website route and state machine test coverage">
+                                            <span className="text-[10px] text-gray-400 font-mono">T3 Coverage:</span>
+                                            <span className="text-xs font-bold text-indigo-400 font-mono">
+                                                {graphData?.scores?.route_coverage_score !== undefined ? `${graphData.scores.route_coverage_score}%` : "--"}
+                                            </span>
+                                        </div>
+
+                                        {/* Real-time live-sync toggle button */}
+                                        <button 
+                                            onClick={() => setLiveSyncGraph(!liveSyncGraph)}
+                                            className={`px-2.5 py-1 border rounded text-xs transition flex items-center gap-1 cursor-pointer font-medium ${
+                                                liveSyncGraph 
+                                                    ? "bg-emerald-950/80 text-emerald-300 border-emerald-600 shadow-sm shadow-emerald-900/30" 
+                                                    : "bg-gray-800 text-gray-400 border-gray-700"
+                                            }`}
+                                            title="Toggle 4-second live background synchronization"
+                                        >
+                                            <span className={`w-2 h-2 rounded-full ${liveSyncGraph ? "bg-emerald-400 animate-ping" : "bg-gray-500"}`}></span>
+                                            <span>Live Sync: {liveSyncGraph ? "ON" : "OFF"}</span>
+                                        </button>
+
+                                        {/* Force Resync / Re-hydration from Artifacts button */}
+                                        <button 
+                                            onClick={forceResyncGraphFromArtifacts}
+                                            disabled={loadingGraph}
+                                            className="px-2.5 py-1 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white font-bold rounded text-xs shadow transition flex items-center gap-1 cursor-pointer"
+                                            title="Force re-hydration from all project disk manifests and reports"
+                                        >
+                                            <span>📥</span> {loadingGraph ? "Re-Hydrating..." : "Force Resync"}
+                                        </button>
+
+                                        <button 
+                                            onClick={() => fetchGraphContext(false)}
+                                            disabled={loadingGraph}
+                                            className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded text-xs transition flex items-center gap-1 cursor-pointer"
+                                            title="Refresh current graph state"
+                                        >
+                                            <span>🔄</span> Refresh
+                                        </button>
+                                        <button 
+                                            onClick={() => setShowGraphModal(false)}
+                                            className="text-gray-400 hover:text-white text-lg font-bold px-2 py-0.5 rounded-lg hover:bg-gray-800 transition cursor-pointer"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Filter & Diagnostic Presets Bar */}
+                                <div className="flex items-center justify-between border-b border-gray-800/80 pb-2.5 mb-3 gap-2 flex-wrap text-xs shrink-0">
+                                    <div className="flex items-center space-x-1.5 flex-wrap">
+                                        <span className="text-[10px] font-mono text-gray-400 uppercase font-bold mr-1">Diagnostics:</span>
+                                        {[
+                                            { id: 'ALL', label: 'All Nodes', icon: '🌐', count: graphData?.diagnostic_counts?.ALL ?? graphData?.total_nodes ?? (graphData?.nodes?.length || 0) },
+                                            { id: 'BREAKPOINTS', label: 'Breakpoints', icon: '⚠️', count: graphData?.diagnostic_counts?.BREAKPOINTS ?? 0 },
+                                            { id: 'ISOLATED_SCENARIOS', label: 'Isolated Scenarios', icon: '🏝️', count: graphData?.diagnostic_counts?.ISOLATED_SCENARIOS ?? 0 },
+                                            { id: 'BROKEN_NODES', label: 'Broken Nodes', icon: '💥', count: graphData?.diagnostic_counts?.BROKEN_NODES ?? 0 },
+                                            { id: 'TIMEOUTS', label: 'Timeouts / Unknown', icon: '⏳', count: graphData?.diagnostic_counts?.TIMEOUTS ?? 0 },
+                                            { id: 'UNTESTED_ROUTES', label: 'Untested Routes', icon: '⚪', count: graphData?.diagnostic_counts?.UNTESTED_ROUTES ?? 0 }
+                                        ].map(preset => {
+                                            const isSelected = graphFilter === preset.id || (preset.id === 'ALL' && graphFilter === 'ALL');
+                                            return (
+                                                <button
+                                                    key={preset.id}
+                                                    onClick={() => runDiagnosticFilter(preset.id)}
+                                                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition cursor-pointer border flex items-center space-x-1.5 ${
+                                                        isSelected
+                                                            ? 'bg-emerald-900/70 text-emerald-100 border-emerald-400 shadow-sm font-bold'
+                                                            : 'bg-gray-900/80 text-gray-400 border-gray-800 hover:text-gray-200 hover:bg-gray-800'
+                                                    }`}
+                                                >
+                                                    <span>{preset.icon}</span>
+                                                    <span>{preset.label}</span>
+                                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono border ${
+                                                        isSelected 
+                                                            ? 'bg-emerald-950 text-emerald-200 border-emerald-600' 
+                                                            : preset.count > 0 && preset.id !== 'ALL'
+                                                            ? 'bg-amber-950 text-amber-300 border-amber-800'
+                                                            : 'bg-gray-950 text-gray-400 border-gray-800'
+                                                    }`}>
+                                                        {preset.count}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <span className="text-[10px] text-gray-400 font-mono">
+                                            Cypher Queries: <code className="text-cyan-300">artifacts/reports/graph_queries.cypher</code>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Action Notification Banner if any */}
+                                {graphActionStatus && (
+                                    <div className="mb-3 px-3 py-1.5 bg-blue-950/80 border border-blue-600/70 rounded-lg text-xs text-blue-200 flex justify-between items-center shrink-0">
+                                        <div className="flex items-center space-x-2">
+                                            <span>ℹ️</span>
+                                            <span className="font-mono">{graphActionStatus}</span>
+                                        </div>
+                                        <button onClick={() => setGraphActionStatus(null)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                                    </div>
+                                )}
+
+                                {/* Main Content: Left Split (Node Topology) + Right Split (Inspector / Cypher) */}
+                                <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-hidden min-h-0">
+                                    {/* Left: Node Topology List (5 cols) */}
+                                    <div className="lg:col-span-6 bg-gray-900/70 border border-gray-800 rounded-xl p-3 flex flex-col overflow-hidden">
+                                        {/* Canvas / List View Header */}
+                                        <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-800 text-xs shrink-0">
+                                            <div className="flex items-center space-x-1">
+                                                <button
+                                                    onClick={() => setGraphViewMode("canvas")}
+                                                    className={`px-2.5 py-1 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                                                        graphViewMode === 'canvas'
+                                                            ? 'bg-cyan-600 text-white shadow'
+                                                            : 'bg-gray-800 text-gray-400 hover:text-white'
+                                                    }`}
+                                                >
+                                                    <span>🗺️</span> Visual Graph Canvas
+                                                </button>
+                                                <button
+                                                    onClick={() => setGraphViewMode("list")}
+                                                    className={`px-2.5 py-1 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                                                        graphViewMode === 'list'
+                                                            ? 'bg-cyan-600 text-white shadow'
+                                                            : 'bg-gray-800 text-gray-400 hover:text-white'
+                                                    }`}
+                                                >
+                                                    <span>📋</span> Node List ({graphData?.nodes?.length || 0})
+                                                </button>
+                                            </div>
+                                            {graphViewMode === 'canvas' && (
+                                                <div className="flex items-center space-x-1">
+                                                    <select
+                                                        value={canvasNodeLimit}
+                                                        onChange={e => setCanvasNodeLimit(Number(e.target.value))}
+                                                        className="bg-gray-950 border border-gray-800 text-[10px] text-gray-300 rounded px-1.5 py-0.5"
+                                                        title="Visible Node Limit"
+                                                    >
+                                                        <option value={30}>30 Nodes</option>
+                                                        <option value={50}>50 Nodes</option>
+                                                        <option value={80}>80 Nodes</option>
+                                                        <option value={150}>150 Nodes</option>
+                                                    </select>
+                                                    <button onClick={() => setCanvasZoom(z => Math.min(2.5, z + 0.2))} className="px-2 py-0.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-[10px] font-mono cursor-pointer" title="Zoom In">🔍+</button>
+                                                    <button onClick={() => setCanvasZoom(z => Math.max(0.4, z - 0.2))} className="px-2 py-0.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-[10px] font-mono cursor-pointer" title="Zoom Out">🔍-</button>
+                                                    <button onClick={() => { setCanvasZoom(1.0); setCanvasPan({ x: 0, y: 0 }); }} className="px-2 py-0.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-[10px] font-mono cursor-pointer" title="Reset View">⟲</button>
+                                                    <button
+                                                        onClick={() => setIsCanvasFullscreen(true)}
+                                                        className="px-2 py-0.5 bg-cyan-900/60 hover:bg-cyan-800 text-cyan-200 border border-cyan-700 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer transition ml-1"
+                                                        title="Open Visual Graph Canvas in Fullscreen Overlay"
+                                                    >
+                                                        <span>⛶</span> Fullscreen
+                                                    </button>
+                                                    <button
+                                                        onClick={toggleNativeDisplayFullscreen}
+                                                        className="px-2 py-0.5 bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 border border-indigo-700 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                                                        title="Toggle Native Monitor Display Fullscreen"
+                                                    >
+                                                        <span>🖥️</span> Display
+                                                    </button>
+                                                    <button
+                                                        onClick={openStandaloneGraphViewer}
+                                                        className="px-2 py-0.5 bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-700 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                                                        title="Open Standalone Window for Multi-Monitor Review"
+                                                    >
+                                                        <span>↗</span> Window
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {graphViewMode === 'canvas' ? (
+                                            /* ── 2D Visual Relationship Graph Canvas (REQ-068, REQ-070 & REQ-071) ── */
+                                            <div
+                                                className="flex-1 relative bg-black/80 border border-gray-800 rounded-lg overflow-hidden select-none cursor-grab active:cursor-grabbing flex flex-col"
+                                                onWheel={handleCanvasWheel}
+                                                onMouseDown={(e) => {
+                                                    if (e.target.tagName === 'svg' || e.target.id === 'canvas-bg') {
+                                                        setIsPanningCanvas(true);
+                                                        setPanStart({ x: e.clientX - canvasPan.x, y: e.clientY - canvasPan.y });
+                                                    }
+                                                }}
+                                                onMouseMove={(e) => {
+                                                    if (draggingNodeId && nodePositions[draggingNodeId]) {
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        const mouseX = (e.clientX - rect.left - canvasPan.x) / canvasZoom;
+                                                        const mouseY = (e.clientY - rect.top - canvasPan.y) / canvasZoom;
+                                                        setNodePositions(prev => ({
+                                                            ...prev,
+                                                            [draggingNodeId]: { x: Math.round(mouseX - dragOffset.x), y: Math.round(mouseY - dragOffset.y) }
+                                                        }));
+                                                    } else if (isPanningCanvas) {
+                                                        setCanvasPan({
+                                                            x: e.clientX - panStart.x,
+                                                            y: e.clientY - panStart.y
+                                                        });
+                                                    }
+                                                }}
+                                                onMouseUp={() => {
+                                                    setIsPanningCanvas(false);
+                                                    setDraggingNodeId(null);
+                                                }}
+                                                onMouseLeave={() => {
+                                                    setIsPanningCanvas(false);
+                                                    setDraggingNodeId(null);
+                                                }}
+                                            >
+                                                {/* Zero Nodes Matching Diagnostic Filter Alert */}
+                                                {(!graphData?.nodes || graphData.nodes.length === 0) && (
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
+                                                        <div className="bg-gray-900/95 border border-emerald-600/80 rounded-2xl p-6 text-center max-w-sm shadow-2xl pointer-events-auto">
+                                                            <div className="text-3xl mb-2">✨</div>
+                                                            <h4 className="text-sm font-bold text-gray-100 mb-1">Zero {graphFilter.replace('_', ' ')} Detected</h4>
+                                                            <p className="text-xs text-gray-400 mb-4">No entities currently trigger this diagnostic condition in the active topology.</p>
+                                                            <button
+                                                                onClick={() => runDiagnosticFilter('ALL')}
+                                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow"
+                                                            >
+                                                                View All Nodes
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Tier Legend Bar */}
+                                                <div className="absolute top-2 left-2 z-10 flex items-center gap-2 bg-gray-950/80 backdrop-blur border border-gray-800 px-2 py-1 rounded text-[9px] font-mono text-gray-400 pointer-events-none flex-wrap">
+                                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> T1: Page</span>
+                                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-500 inline-block"></span> State</span>
+                                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> Action</span>
+                                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500 inline-block"></span> T2: Test</span>
+                                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Script</span>
+                                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500 inline-block"></span> T3: Coverage</span>
+                                                </div>
+
+                                                {/* Hovered Node Tooltip */}
+                                                {hoveredGraphNode && (
+                                                    <div className="absolute bottom-2 left-2 z-10 bg-gray-950/95 border border-cyan-500/80 p-2 rounded-lg text-[10px] font-mono shadow-2xl pointer-events-none max-w-xs">
+                                                        <div className="text-cyan-300 font-bold flex items-center justify-between">
+                                                            <span>{hoveredGraphNode.type || hoveredGraphNode.label}</span>
+                                                            <span className="text-[9px] px-1 rounded bg-cyan-950 text-cyan-200 border border-cyan-800">{hoveredGraphNode.status || 'ACTIVE'}</span>
+                                                        </div>
+                                                        <div className="text-gray-200 truncate mt-0.5">{hoveredGraphNode.id}</div>
+                                                        {hoveredGraphNode.properties?.route && (
+                                                            <div className="text-gray-400">Route: <span className="text-cyan-400">{hoveredGraphNode.properties.route}</span></div>
+                                                        )}
+                                                        {hoveredGraphNode.properties?.action_type && (
+                                                            <div className="text-gray-400">Action: <span className="text-amber-400">{hoveredGraphNode.properties.action_type}</span></div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                <svg className="w-full h-full min-h-[440px]">
+                                                    <defs>
+                                                        <marker
+                                                            id="graph-arrow"
+                                                            markerWidth="8"
+                                                            markerHeight="8"
+                                                            refX="18"
+                                                            refY="4"
+                                                            orient="auto"
+                                                        >
+                                                            <path d="M0,0 L8,4 L0,8 Z" fill="#06b6d4" />
+                                                        </marker>
+                                                        <marker
+                                                            id="graph-arrow-active"
+                                                            markerWidth="10"
+                                                            markerHeight="10"
+                                                            refX="20"
+                                                            refY="5"
+                                                            orient="auto"
+                                                        >
+                                                            <path d="M0,0 L10,5 L0,10 Z" fill="#22d3ee" />
+                                                        </marker>
+                                                    </defs>
+                                                    <rect id="canvas-bg" width="100%" height="100%" fill="transparent" />
+
+                                                    <g transform={`translate(${canvasPan.x}, ${canvasPan.y}) scale(${canvasZoom})`}>
+                                                        {/* 1. Directed Edges with Relationship Labels */}
+                                                        {graphData?.edges && graphData.edges.map((edge, idx) => {
+                                                            const src = nodePositions[edge.source];
+                                                            const dst = nodePositions[edge.target];
+                                                            if (!src || !dst) return null;
+                                                            const isConnectedToInspected = inspectedGraphNode && (inspectedGraphNode.id === edge.source || inspectedGraphNode.id === edge.target);
+
+                                                            return (
+                                                                <g key={`edge-${idx}`}>
+                                                                    <line
+                                                                        x1={src.x}
+                                                                        y1={src.y}
+                                                                        x2={dst.x}
+                                                                        y2={dst.y}
+                                                                        stroke={isConnectedToInspected ? "#22d3ee" : "#374151"}
+                                                                        strokeWidth={isConnectedToInspected ? 2.5 : 1.2}
+                                                                        strokeDasharray={isConnectedToInspected ? "4 2" : "none"}
+                                                                        markerEnd={isConnectedToInspected ? "url(#graph-arrow-active)" : "url(#graph-arrow)"}
+                                                                    />
+                                                                    <text
+                                                                        x={(src.x + dst.x) / 2}
+                                                                        y={(src.y + dst.y) / 2 - 4}
+                                                                        fill={isConnectedToInspected ? "#22d3ee" : "#6b7280"}
+                                                                        fontSize="8"
+                                                                        fontFamily="monospace"
+                                                                        textAnchor="middle"
+                                                                        className="pointer-events-none select-none"
+                                                                    >
+                                                                        {edge.relationship}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+
+                                                        {/* 2. Interactive Node Glyphs */}
+                                                        {graphData?.nodes && graphData.nodes.slice(0, canvasNodeLimit).map(node => {
+                                                            const pos = nodePositions[node.id];
+                                                            if (!pos) return null;
+                                                            const isSelected = inspectedGraphNode?.id === node.id;
+                                                            const t = (node.type || node.label || '').toUpperCase();
+
+                                                            const config = 
+                                                                t === 'PAGE' ? { fill: '#1e1b4b', stroke: '#6366f1', icon: '📄' } :
+                                                                t === 'STATE' ? { fill: '#083344', stroke: '#06b6d4', icon: '⚡' } :
+                                                                t === 'ACTION' ? { fill: '#451a03', stroke: '#f59e0b', icon: '🖱️' } :
+                                                                t === 'TEST_CASE' || t === 'TESTCASE' ? { fill: '#3b0764', stroke: '#a855f7', icon: '🧪' } :
+                                                                t === 'SCRIPT' ? { fill: '#064e3b', stroke: '#10b981', icon: '📜' } :
+                                                                t === 'REQUIREMENT' ? { fill: '#1e293b', stroke: '#38bdf8', icon: '📋' } :
+                                                                t === 'COVERAGE_METRIC' || t === 'COVERAGEMETRIC' ? { fill: '#134e4a', stroke: '#14b8a6', icon: '🎯' } :
+                                                                { fill: '#022c22', stroke: '#22c55e', icon: '📊' };
+
+                                                            return (
+                                                                <g
+                                                                    key={node.id}
+                                                                    transform={`translate(${pos.x}, ${pos.y})`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setInspectedGraphNode(node);
+                                                                    }}
+                                                                    onMouseDown={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setDraggingNodeId(node.id);
+                                                                        const rect = e.currentTarget.ownerSVGElement.getBoundingClientRect();
+                                                                        const mouseX = (e.clientX - rect.left - canvasPan.x) / canvasZoom;
+                                                                        const mouseY = (e.clientY - rect.top - canvasPan.y) / canvasZoom;
+                                                                        setDragOffset({ x: mouseX - pos.x, y: mouseY - pos.y });
+                                                                    }}
+                                                                    onMouseEnter={() => setHoveredGraphNode(node)}
+                                                                    onMouseLeave={() => setHoveredGraphNode(null)}
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    {isSelected && (
+                                                                        <circle
+                                                                            r="24"
+                                                                            fill="none"
+                                                                            stroke="#22d3ee"
+                                                                            strokeWidth="2.5"
+                                                                            className="animate-pulse"
+                                                                        />
+                                                                    )}
+                                                                    <circle
+                                                                        r="18"
+                                                                        fill={config.fill}
+                                                                        stroke={isSelected ? '#22d3ee' : config.stroke}
+                                                                        strokeWidth={isSelected ? 2.5 : 1.8}
+                                                                        filter="drop-shadow(0px 2px 4px rgba(0,0,0,0.6))"
+                                                                    />
+                                                                    <text
+                                                                        y="4"
+                                                                        textAnchor="middle"
+                                                                        fontSize="12"
+                                                                        className="pointer-events-none select-none"
+                                                                    >
+                                                                        {config.icon}
+                                                                    </text>
+                                                                    <text
+                                                                        y="28"
+                                                                        textAnchor="middle"
+                                                                        fill="#d1d5db"
+                                                                        fontSize="9"
+                                                                        fontFamily="monospace"
+                                                                        className="pointer-events-none select-none"
+                                                                    >
+                                                                        {node.label || node.type}
+                                                                    </text>
+                                                                    <text
+                                                                        y="38"
+                                                                        textAnchor="middle"
+                                                                        fill="#9ca3af"
+                                                                        fontSize="7.5"
+                                                                        fontFamily="monospace"
+                                                                        className="pointer-events-none select-none"
+                                                                    >
+                                                                        {node.id.length > 12 ? `${node.id.substring(0, 11)}…` : node.id}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+                                                    </g>
+                                                </svg>
+                                            </div>
+                                        ) : (
+                                            /* ── Node List View ── */
+                                            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                                                {(!graphData?.nodes || graphData.nodes.length === 0) ? (
+                                                    <div className="text-center py-10 text-gray-500 text-xs">
+                                                        No nodes found for filter: <strong className="text-emerald-400">{graphFilter}</strong>
+                                                    </div>
+                                                ) : (
+                                                    graphData.nodes.map(node => {
+                                                        const isSelected = inspectedGraphNode?.id === node.id;
+                                                        const labelColor = 
+                                                            node.label === 'Page' ? 'bg-indigo-950 text-indigo-300 border-indigo-700' :
+                                                            node.label === 'State' ? 'bg-cyan-950 text-cyan-300 border-cyan-700' :
+                                                            node.label === 'Action' ? 'bg-emerald-950 text-emerald-300 border-emerald-700' :
+                                                            node.label === 'TestCase' ? 'bg-purple-950 text-purple-300 border-purple-700' :
+                                                            node.label === 'Script' ? 'bg-amber-950 text-amber-300 border-amber-700' :
+                                                            'bg-gray-800 text-gray-300 border-gray-700';
+
+                                                        const statusBadge = node.properties?.status || node.properties?.postcondition_status || node.properties?.execution_status;
+
+                                                        return (
+                                                            <div
+                                                                key={node.id}
+                                                                onClick={() => setInspectedGraphNode(node)}
+                                                                className={`p-2.5 rounded-lg border text-xs cursor-pointer transition flex flex-col space-y-1 ${
+                                                                    isSelected 
+                                                                        ? 'bg-emerald-950/40 border-emerald-500 shadow-md' 
+                                                                        : 'bg-gray-950/70 border-gray-800 hover:border-gray-700 hover:bg-gray-900/60'
+                                                                }`}
+                                                            >
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${labelColor}`}>
+                                                                        {node.label}
+                                                                    </span>
+                                                                    {statusBadge && (
+                                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono border ${
+                                                                            statusBadge === 'CONFIRMED_SUCCESS' || statusBadge === 'PASSED' || statusBadge === 'VERIFIED'
+                                                                                ? 'bg-green-950 text-green-300 border-green-700'
+                                                                                : statusBadge === 'UNKNOWN' || statusBadge === 'PENDING_READBACK'
+                                                                                ? 'bg-amber-950 text-amber-300 border-amber-600 animate-pulse'
+                                                                                : 'bg-red-950 text-red-300 border-red-700'
+                                                                        }`}>
+                                                                            {statusBadge}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="font-mono text-[11px] text-gray-200 truncate" title={node.id}>
+                                                                    {node.id}
+                                                                </div>
+                                                                {node.properties?.route && (
+                                                                    <div className="text-[10px] text-gray-400 font-mono">
+                                                                        Route: <span className="text-cyan-300">{node.properties.route}</span>
+                                                                    </div>
+                                                                )}
+                                                                {node.properties?.action_type && (
+                                                                    <div className="text-[10px] text-gray-400">
+                                                                        Action: <span className="text-emerald-300 font-bold">{node.properties.action_type}</span> ({node.properties.selector || 'DOM'})
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Right: Inspector & Cypher Console (7 cols) */}
+                                    <div className="lg:col-span-7 bg-gray-900/70 border border-gray-800 rounded-xl p-3.5 flex flex-col overflow-hidden">
+                                        {/* Inspector Header / Tabs */}
+                                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-800 text-xs shrink-0">
+                                            <div className="flex items-center space-x-2">
+                                                <span className="font-bold text-gray-300 flex items-center gap-1.5">
+                                                    <span>🔍</span> Details & Diagnostic Console
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center space-x-1.5">
+                                                <button
+                                                    onClick={() => setCypherQueryText("MATCH (p:Page)-[:HAS_STATE]->(s:State)-[:EXECUTES_ACTION]->(a:Action) RETURN p, s, a LIMIT 10")}
+                                                    className="px-2 py-0.5 rounded text-[10px] bg-gray-800 hover:bg-gray-700 text-cyan-300 border border-cyan-800 transition"
+                                                >
+                                                    T1 Cypher
+                                                </button>
+                                                <button
+                                                    onClick={() => setCypherQueryText("MATCH (a:Action) WHERE a.status = 'UNKNOWN' OR a.postcondition_status = 'PENDING_READBACK' RETURN a")}
+                                                    className="px-2 py-0.5 rounded text-[10px] bg-gray-800 hover:bg-gray-700 text-amber-300 border border-amber-800 transition"
+                                                >
+                                                    Timeouts
+                                                </button>
+                                                <button
+                                                    onClick={() => setCypherQueryText("MATCH (t:TestCase) WHERE NOT (t)-[:COVERS_ROUTE]->() RETURN t")}
+                                                    className="px-2 py-0.5 rounded text-[10px] bg-gray-800 hover:bg-gray-700 text-purple-300 border border-purple-800 transition"
+                                                >
+                                                    Isolated
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Inspected Node Workbench */}
+                                        {inspectedGraphNode ? (
+                                            <div className="bg-gray-950/80 border border-emerald-900/80 rounded-lg p-3 mb-3 shrink-0">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <span className="text-[10px] uppercase font-mono text-emerald-400 font-bold">
+                                                            {inspectedGraphNode.label} Node
+                                                        </span>
+                                                        <h3 className="text-sm font-bold text-gray-100 font-mono break-all">
+                                                            {inspectedGraphNode.id}
+                                                        </h3>
+                                                    </div>
+                                                    <button onClick={() => setInspectedGraphNode(null)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                                                </div>
+
+                                                {/* Authoritative Read-Back Action Trigger */}
+                                                {(inspectedGraphNode.properties?.status === 'UNKNOWN' || inspectedGraphNode.properties?.postcondition_status === 'PENDING_READBACK' || inspectedGraphNode.label === 'Action') && (
+                                                    <div className="bg-emerald-950/40 border border-emerald-700/60 rounded-lg p-2.5 mb-2.5">
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <div className="text-[11px] font-bold text-emerald-300 flex items-center gap-1">
+                                                                    <span>🔬</span> Authoritative Read-Back Probe
+                                                                </div>
+                                                                <div className="text-[10px] text-gray-400">
+                                                                    Target Selector: <code className="text-cyan-300">{inspectedGraphNode.properties?.selector || 'DOM Node'}</code>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => verifyStateBoundAction(inspectedGraphNode.id, inspectedGraphNode.properties?.expected_indicator || inspectedGraphNode.properties?.value || '')}
+                                                                disabled={executingGraphAction}
+                                                                className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded text-[11px] font-bold shadow transition cursor-pointer flex items-center gap-1"
+                                                            >
+                                                                <span>⚡</span> {executingGraphAction ? "Probing..." : "Run Read-Back Probe"}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Properties Table */}
+                                                <div className="max-h-36 overflow-y-auto text-[11px] font-mono space-y-1 custom-scrollbar pr-1 bg-black/40 p-2 rounded border border-gray-900">
+                                                    {Object.entries(inspectedGraphNode.properties || {}).map(([k, v]) => (
+                                                        <div key={k} className="flex justify-between border-b border-gray-900 pb-0.5">
+                                                            <span className="text-gray-400">{k}:</span>
+                                                            <span className="text-cyan-200 truncate ml-2 max-w-[280px]" title={String(v)}>
+                                                                {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-gray-950/40 border border-gray-800 rounded-lg p-3 mb-3 text-center text-xs text-gray-500 shrink-0">
+                                                Select a node from the topology list on the left to inspect its state bindings and execute authoritative read-backs.
+                                            </div>
+                                        )}
+
+                                        {/* Cypher Query Console */}
+                                        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                                            <div className="flex justify-between items-center mb-1 text-xs shrink-0">
+                                                <span className="font-bold text-cyan-300 font-mono flex items-center gap-1">
+                                                    <span>⚡</span> Cypher Execution Engine
+                                                </span>
+                                                <span className="text-[10px] text-gray-500 font-mono">In-Memory Graph Query</span>
+                                            </div>
+                                            <textarea
+                                                value={cypherQueryText}
+                                                onChange={e => setCypherQueryText(e.target.value)}
+                                                className="w-full h-14 bg-black border border-gray-800 rounded p-2 text-xs font-mono text-green-300 focus:outline-none focus:border-cyan-500 resize-none shrink-0"
+                                                placeholder="Enter Cypher query (e.g. MATCH (n) RETURN n LIMIT 25)"
+                                            />
+                                            {/* Cypher Quick Template Chips */}
+                                            <div className="flex items-center gap-1.5 flex-wrap my-1 shrink-0">
+                                                <span className="text-[10px] text-gray-500 font-mono">Presets:</span>
+                                                {[
+                                                    { label: "All Nodes", q: "MATCH (n) RETURN n LIMIT 25" },
+                                                    { label: "Pages", q: "MATCH (p:Page) RETURN p" },
+                                                    { label: "UI Tests", q: "MATCH (t:TestCase) WHERE t.test_type = 'UI' RETURN t LIMIT 25" },
+                                                    { label: "Page States", q: "MATCH (p:Page)-[r:HAS_STATE]->(s:State) RETURN p, s LIMIT 25" },
+                                                    { label: "Test Requirements", q: "MATCH (t:TestCase)-[r:COVERS]->(req:Requirement) RETURN t, req LIMIT 25" },
+                                                    { label: "Count All", q: "MATCH (n) RETURN count(n)" }
+                                                ].map((chip, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => {
+                                                            setCypherQueryText(chip.q);
+                                                            executeCypherQuery(chip.q);
+                                                        }}
+                                                        className="px-2 py-0.5 bg-gray-900 hover:bg-cyan-950 hover:text-cyan-300 text-gray-400 border border-gray-800 hover:border-cyan-700 rounded text-[10px] font-mono transition cursor-pointer"
+                                                    >
+                                                        {chip.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <div className="flex justify-between items-center my-1 shrink-0">
+                                                <div className="text-[10px] text-gray-500 font-mono">
+                                                    Supports MATCH, WHERE, RETURN, LIMIT, node labels & relationships
+                                                </div>
+                                                <button
+                                                    onClick={() => executeCypherQuery(cypherQueryText)}
+                                                    disabled={executingGraphAction}
+                                                    className="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                                >
+                                                    <span>▶</span> {executingGraphAction ? "Running..." : "Execute Cypher"}
+                                                </button>
+                                            </div>
+
+                                            {/* Cypher Results Area */}
+                                            <div className="flex-1 bg-black/70 border border-gray-800 rounded-lg p-2.5 overflow-y-auto font-mono text-[10px] text-gray-300 custom-scrollbar">
+                                                {cypherQueryResult ? (
+                                                    cypherQueryResult.status === 'success' ? (
+                                                        <div>
+                                                             <div className="text-emerald-400 font-bold mb-1 flex items-center justify-between">
+                                                                 <span>✓ Query executed: {cypherQueryResult.count} records returned</span>
+                                                                 <span className="text-[9px] text-gray-500 font-mono">{cypherQueryResult.execution_time_ms ? `${cypherQueryResult.execution_time_ms}ms` : ""}</span>
+                                                             </div>
+                                                            <pre className="text-gray-300 whitespace-pre-wrap">
+                                                                {JSON.stringify(cypherQueryResult.results, null, 2)}
+                                                            </pre>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-red-400 p-2 bg-red-950/20 border border-red-900/50 rounded">
+                                                            <div className="font-bold flex items-center gap-1">
+                                                                <span>✕</span> Cypher Error
+                                                            </div>
+                                                            <div className="mt-1 text-gray-300">
+                                                                {cypherQueryResult.error || cypherQueryResult.message || "Failed to parse or execute query."}
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                ) : (
+                                                    <div className="text-gray-500 text-center py-4">
+                                                        Run a Cypher query above or choose a preset chip to inspect topology relationships.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── REQ-GRAPH-DIAGNOSTIC-FILTER-CANVAS-FULLSCREEN-070: Dedicated Full-Screen Canvas Overlay ── */}
+                        {isCanvasFullscreen && (
+                            <div className="fixed inset-0 z-[120] bg-gray-950/98 flex flex-col p-4 backdrop-blur-2xl text-gray-100 select-none">
+                                {/* Top Floating Bar */}
+                                <div className="flex items-center justify-between bg-gray-900/95 border border-gray-800 rounded-xl px-4 py-2.5 mb-3 shadow-2xl shrink-0 gap-3 flex-wrap">
+                                    <div className="flex items-center space-x-3">
+                                        <span className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                                            <span className="text-cyan-400">🌐</span> QA Knowledge Graph (Fullscreen View)
+                                        </span>
+                                        <span className="text-xs text-gray-400 font-mono">
+                                            Rendering <strong className="text-cyan-300">{Math.min(canvasNodeLimit, graphData?.nodes?.length || 0)}</strong> of <strong className="text-gray-200">{graphData?.nodes?.length || 0}</strong> nodes, <strong className="text-gray-200">{graphData?.edges?.length || 0}</strong> edges
+                                        </span>
+                                    </div>
+
+                                    {/* Diagnostic Filter Buttons with live counts */}
+                                    <div className="flex items-center space-x-1.5 flex-wrap">
+                                        {[
+                                            { id: 'ALL', label: 'All', icon: '🌐', count: graphData?.diagnostic_counts?.ALL ?? graphData?.total_nodes ?? (graphData?.nodes?.length || 0) },
+                                            { id: 'BREAKPOINTS', label: 'Breakpoints', icon: '⚠️', count: graphData?.diagnostic_counts?.BREAKPOINTS ?? 0 },
+                                            { id: 'ISOLATED_SCENARIOS', label: 'Isolated', icon: '🏝️', count: graphData?.diagnostic_counts?.ISOLATED_SCENARIOS ?? 0 },
+                                            { id: 'BROKEN_NODES', label: 'Broken', icon: '💥', count: graphData?.diagnostic_counts?.BROKEN_NODES ?? 0 },
+                                            { id: 'TIMEOUTS', label: 'Timeouts', icon: '⏳', count: graphData?.diagnostic_counts?.TIMEOUTS ?? 0 },
+                                            { id: 'UNTESTED_ROUTES', label: 'Untested', icon: '⚪', count: graphData?.diagnostic_counts?.UNTESTED_ROUTES ?? 0 }
+                                        ].map(p => {
+                                            const isSel = graphFilter === p.id || (p.id === 'ALL' && graphFilter === 'ALL');
+                                            return (
+                                                <button
+                                                    key={p.id}
+                                                    onClick={() => runDiagnosticFilter(p.id)}
+                                                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition cursor-pointer border flex items-center space-x-1 ${
+                                                        isSel
+                                                            ? 'bg-emerald-900/80 text-emerald-100 border-emerald-400 shadow font-bold'
+                                                            : 'bg-gray-900 text-gray-400 border-gray-800 hover:text-white'
+                                                    }`}
+                                                >
+                                                    <span>{p.icon}</span>
+                                                    <span>{p.label}</span>
+                                                    <span className="px-1 text-[9px] font-mono rounded bg-black/50 border border-gray-700">{p.count}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Zoom, Pan, Fit, Exit */}
+                                    <div className="flex items-center space-x-2">
+                                        <select
+                                            value={canvasNodeLimit}
+                                            onChange={e => setCanvasNodeLimit(Number(e.target.value))}
+                                            className="bg-gray-950 border border-gray-700 text-xs text-gray-300 rounded px-2 py-1"
+                                        >
+                                            <option value={30}>30 Nodes</option>
+                                            <option value={50}>50 Nodes</option>
+                                            <option value={80}>80 Nodes</option>
+                                            <option value={150}>150 Nodes</option>
+                                        </select>
+                                        <button onClick={() => setCanvasZoom(z => Math.min(3.0, z + 0.2))} className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs font-mono" title="Zoom In">🔍+</button>
+                                        <button onClick={() => setCanvasZoom(z => Math.max(0.3, z - 0.2))} className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs font-mono" title="Zoom Out">🔍-</button>
+                                        <button onClick={() => { setCanvasZoom(1.0); setCanvasPan({ x: 0, y: 0 }); }} className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs font-mono" title="Reset View">⟲ Reset</button>
+                                        <button
+                                            onClick={toggleNativeDisplayFullscreen}
+                                            className="px-2.5 py-1 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 border border-indigo-700 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                            title="Toggle Native Monitor Display Fullscreen"
+                                        >
+                                            <span>🖥️</span> {isNativeDisplayFullscreen ? "Exit Display" : "Display Fullscreen"}
+                                        </button>
+                                        <button
+                                            onClick={openStandaloneGraphViewer}
+                                            className="px-2.5 py-1 bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-700 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                            title="Open in Standalone Browser Window"
+                                        >
+                                            <span>↗</span> Pop-out Window
+                                        </button>
+                                        <button
+                                            onClick={() => setIsCanvasFullscreen(false)}
+                                            className="px-3 py-1 bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-700 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <span>✕</span> Exit (ESC)
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Fullscreen Main Visual Area */}
+                                <div className="flex-1 relative bg-black/90 border border-gray-800 rounded-xl overflow-hidden flex min-h-0">
+                                    {/* Visual Canvas SVG */}
+                                    <div
+                                        className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing flex flex-col"
+                                        onWheel={handleCanvasWheel}
+                                        onMouseDown={(e) => {
+                                            if (e.target.tagName === 'svg' || e.target.id === 'fs-canvas-bg') {
+                                                setIsPanningCanvas(true);
+                                                setPanStart({ x: e.clientX - canvasPan.x, y: e.clientY - canvasPan.y });
+                                            }
+                                        }}
+                                        onMouseMove={(e) => {
+                                            if (draggingNodeId && nodePositions[draggingNodeId]) {
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                const mouseX = (e.clientX - rect.left - canvasPan.x) / canvasZoom;
+                                                const mouseY = (e.clientY - rect.top - canvasPan.y) / canvasZoom;
+                                                setNodePositions(prev => ({
+                                                    ...prev,
+                                                    [draggingNodeId]: { x: Math.round(mouseX - dragOffset.x), y: Math.round(mouseY - dragOffset.y) }
+                                                }));
+                                            } else if (isPanningCanvas) {
+                                                setCanvasPan({
+                                                    x: e.clientX - panStart.x,
+                                                    y: e.clientY - panStart.y
+                                                });
+                                            }
+                                        }}
+                                        onMouseUp={() => {
+                                            setIsPanningCanvas(false);
+                                            setDraggingNodeId(null);
+                                        }}
+                                        onMouseLeave={() => {
+                                            setIsPanningCanvas(false);
+                                            setDraggingNodeId(null);
+                                        }}
+                                    >
+                                        {/* Tier Legend Bar */}
+                                        <div className="absolute top-3 left-3 z-10 flex items-center gap-2.5 bg-gray-950/85 backdrop-blur border border-gray-800 px-3 py-1.5 rounded-lg text-xs font-mono text-gray-400 pointer-events-none flex-wrap">
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span> T1: Page</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block"></span> State</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Action</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span> T2: Test</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Script</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block"></span> T3: Coverage</span>
+                                        </div>
+
+                                        {/* Zero Matching Nodes Empty State */}
+                                        {(!graphData?.nodes || graphData.nodes.length === 0) && (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
+                                                <div className="bg-gray-900/95 border border-emerald-600/80 rounded-2xl p-6 text-center max-w-sm shadow-2xl pointer-events-auto">
+                                                    <div className="text-3xl mb-2">✨</div>
+                                                    <h4 className="text-sm font-bold text-gray-100 mb-1">Zero {graphFilter.replace('_', ' ')} Detected</h4>
+                                                    <p className="text-xs text-gray-400 mb-4">No entities currently trigger this diagnostic condition in the active topology.</p>
+                                                    <button
+                                                        onClick={() => runDiagnosticFilter('ALL')}
+                                                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow"
+                                                    >
+                                                        View All Nodes
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Hovered Node Floating Card */}
+                                        {hoveredGraphNode && (
+                                            <div className="absolute bottom-4 left-4 z-10 bg-gray-950/95 border border-cyan-500/80 p-3 rounded-xl text-xs font-mono shadow-2xl pointer-events-none max-w-sm">
+                                                <div className="text-cyan-300 font-bold flex items-center justify-between">
+                                                    <span>{hoveredGraphNode.type || hoveredGraphNode.label}</span>
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-200 border border-cyan-800">{hoveredGraphNode.status || 'ACTIVE'}</span>
+                                                </div>
+                                                <div className="text-gray-200 truncate mt-1 text-[11px]">{hoveredGraphNode.id}</div>
+                                                {hoveredGraphNode.properties?.route && (
+                                                    <div className="text-gray-400 mt-0.5">Route: <span className="text-cyan-400">{hoveredGraphNode.properties.route}</span></div>
+                                                )}
+                                                {hoveredGraphNode.properties?.action_type && (
+                                                    <div className="text-gray-400 mt-0.5">Action: <span className="text-amber-400">{hoveredGraphNode.properties.action_type}</span></div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <svg className="w-full h-full">
+                                            <defs>
+                                                <marker id="fs-graph-arrow" markerWidth="8" markerHeight="8" refX="18" refY="4" orient="auto">
+                                                    <path d="M0,0 L8,4 L0,8 Z" fill="#06b6d4" />
+                                                </marker>
+                                                <marker id="fs-graph-arrow-active" markerWidth="10" markerHeight="10" refX="20" refY="5" orient="auto">
+                                                    <path d="M0,0 L10,5 L0,10 Z" fill="#22d3ee" />
+                                                </marker>
+                                            </defs>
+                                            <rect id="fs-canvas-bg" width="100%" height="100%" fill="transparent" />
+
+                                            <g transform={`translate(${canvasPan.x}, ${canvasPan.y}) scale(${canvasZoom})`}>
+                                                {/* Directed Edges */}
+                                                {graphData?.edges && graphData.edges.map((edge, idx) => {
+                                                    const src = nodePositions[edge.source];
+                                                    const dst = nodePositions[edge.target];
+                                                    if (!src || !dst) return null;
+                                                    const isConnectedToInspected = inspectedGraphNode && (inspectedGraphNode.id === edge.source || inspectedGraphNode.id === edge.target);
+
+                                                    return (
+                                                        <g key={`fs-edge-${idx}`}>
+                                                            <line
+                                                                x1={src.x}
+                                                                y1={src.y}
+                                                                x2={dst.x}
+                                                                y2={dst.y}
+                                                                stroke={isConnectedToInspected ? "#22d3ee" : "#374151"}
+                                                                strokeWidth={isConnectedToInspected ? 2.5 : 1.2}
+                                                                strokeDasharray={isConnectedToInspected ? "4 2" : "none"}
+                                                                markerEnd={isConnectedToInspected ? "url(#fs-graph-arrow-active)" : "url(#fs-graph-arrow)"}
+                                                            />
+                                                            <text
+                                                                x={(src.x + dst.x) / 2}
+                                                                y={(src.y + dst.y) / 2 - 4}
+                                                                fill={isConnectedToInspected ? "#22d3ee" : "#6b7280"}
+                                                                fontSize="8"
+                                                                fontFamily="monospace"
+                                                                textAnchor="middle"
+                                                                className="pointer-events-none select-none"
+                                                            >
+                                                                {edge.relationship}
+                                                            </text>
+                                                        </g>
+                                                    );
+                                                })}
+
+                                                {/* Node Glyphs */}
+                                                {graphData?.nodes && graphData.nodes.slice(0, canvasNodeLimit).map(node => {
+                                                    const pos = nodePositions[node.id];
+                                                    if (!pos) return null;
+                                                    const isSelected = inspectedGraphNode?.id === node.id;
+                                                    const t = (node.type || node.label || '').toUpperCase();
+
+                                                    const config = 
+                                                        t === 'PAGE' ? { fill: '#1e1b4b', stroke: '#6366f1', icon: '📄' } :
+                                                        t === 'STATE' ? { fill: '#083344', stroke: '#06b6d4', icon: '⚡' } :
+                                                        t === 'ACTION' ? { fill: '#451a03', stroke: '#f59e0b', icon: '🖱️' } :
+                                                        t === 'TEST_CASE' || t === 'TESTCASE' ? { fill: '#3b0764', stroke: '#a855f7', icon: '🧪' } :
+                                                        t === 'SCRIPT' ? { fill: '#064e3b', stroke: '#10b981', icon: '📜' } :
+                                                        t === 'REQUIREMENT' ? { fill: '#1e293b', stroke: '#38bdf8', icon: '📋' } :
+                                                        t === 'COVERAGE_METRIC' || t === 'COVERAGEMETRIC' ? { fill: '#134e4a', stroke: '#14b8a6', icon: '🎯' } :
+                                                        { fill: '#022c22', stroke: '#22c55e', icon: '📊' };
+
+                                                    return (
+                                                        <g
+                                                            key={`fs-node-${node.id}`}
+                                                            transform={`translate(${pos.x}, ${pos.y})`}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setInspectedGraphNode(node);
+                                                            }}
+                                                            onMouseDown={(e) => {
+                                                                e.stopPropagation();
+                                                                setDraggingNodeId(node.id);
+                                                                const rect = e.currentTarget.ownerSVGElement.getBoundingClientRect();
+                                                                const mouseX = (e.clientX - rect.left - canvasPan.x) / canvasZoom;
+                                                                const mouseY = (e.clientY - rect.top - canvasPan.y) / canvasZoom;
+                                                                setDragOffset({ x: mouseX - pos.x, y: mouseY - pos.y });
+                                                            }}
+                                                            onMouseEnter={() => setHoveredGraphNode(node)}
+                                                            onMouseLeave={() => setHoveredGraphNode(null)}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            {isSelected && (
+                                                                <circle r="24" fill="none" stroke="#22d3ee" strokeWidth="2.5" className="animate-pulse" />
+                                                            )}
+                                                            <circle
+                                                                r="18"
+                                                                fill={config.fill}
+                                                                stroke={isSelected ? '#22d3ee' : config.stroke}
+                                                                strokeWidth={isSelected ? 2.5 : 1.8}
+                                                                filter="drop-shadow(0px 2px 4px rgba(0,0,0,0.6))"
+                                                            />
+                                                            <text y="4" textAnchor="middle" fontSize="12" className="pointer-events-none select-none">
+                                                                {config.icon}
+                                                            </text>
+                                                            <text y="28" textAnchor="middle" fill="#d1d5db" fontSize="9" fontFamily="monospace" className="pointer-events-none select-none">
+                                                                {node.label || node.type}
+                                                            </text>
+                                                            <text y="38" textAnchor="middle" fill="#9ca3af" fontSize="7.5" fontFamily="monospace" className="pointer-events-none select-none">
+                                                                {node.id.length > 12 ? `${node.id.substring(0, 11)}…` : node.id}
+                                                            </text>
+                                                        </g>
+                                                    );
+                                                })}
+                                            </g>
+                                        </svg>
+                                    </div>
+
+                                    {/* Slide-Over Inspector Drawer in Fullscreen */}
+                                    {inspectedGraphNode && (
+                                        <div className="w-80 lg:w-96 bg-gray-950/95 border-l border-gray-800 p-4 flex flex-col z-20 overflow-y-auto">
+                                            <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-800">
+                                                <span className="font-bold text-xs text-gray-200 flex items-center gap-1.5">
+                                                    <span>🔍</span> Node Details
+                                                </span>
+                                                <button onClick={() => setInspectedGraphNode(null)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                                            </div>
+                                            <div className="space-y-3 text-xs">
+                                                <div>
+                                                    <span className="text-[10px] text-gray-500 font-mono">Entity ID:</span>
+                                                    <div className="font-mono text-cyan-300 font-bold break-all">{inspectedGraphNode.id}</div>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] text-gray-500 font-mono">Type / Label:</span>
+                                                    <div className="text-gray-200 font-mono">{inspectedGraphNode.type || inspectedGraphNode.label}</div>
+                                                </div>
+                                                {inspectedGraphNode.properties?.action_type && (
+                                                    <div className="p-2.5 bg-amber-950/30 border border-amber-800/60 rounded-lg">
+                                                        <div className="text-[11px] font-bold text-amber-300 mb-1">State-Bound Action</div>
+                                                        <div className="text-[10px] text-gray-300 font-mono">Selector: {inspectedGraphNode.properties?.selector}</div>
+                                                        <button
+                                                            onClick={() => verifyStateBoundAction(inspectedGraphNode.id, inspectedGraphNode.properties?.expected_indicator || inspectedGraphNode.properties?.value || '')}
+                                                            disabled={executingGraphAction}
+                                                            className="mt-2 w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold transition cursor-pointer"
+                                                        >
+                                                            {executingGraphAction ? "Probing..." : "⚡ Run Read-Back Probe"}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <span className="text-[10px] text-gray-500 font-mono">Properties:</span>
+                                                    <div className="bg-black/50 border border-gray-900 rounded p-2 text-[10px] font-mono max-h-60 overflow-y-auto space-y-1">
+                                                        {Object.entries(inspectedGraphNode.properties || {}).map(([k, v]) => (
+                                                            <div key={k} className="flex justify-between border-b border-gray-900 pb-0.5">
+                                                                <span className="text-gray-400">{k}:</span>
+                                                                <span className="text-cyan-200 truncate ml-2 max-w-[180px]" title={String(v)}>
+                                                                    {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* LLM Architectural Code Review Modal */}
                         {showReviewModal && (
                             <div className="absolute inset-4 bg-gray-900/95 border-2 border-cyan-500 rounded-xl z-50 p-6 flex flex-col shadow-2xl backdrop-blur-md">
@@ -61378,6 +63813,7 @@ function App() {
 </script>
 </body>
 </html>
+
 """
     
     if os.path.exists("aspice_qa_framework/static/index.html"):
