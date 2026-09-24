@@ -16,7 +16,7 @@
 [![Ollama: Local Inference](https://img.shields.io/badge/Ollama-100%25%20Air--Gapped-black.svg)](https://ollama.com/)
 
 > [!TIP]
-> 📖 **Comprehensive Visual User Guide Available**: For an illustrated end-to-end operational handbook with 26 authentic screenshots covering every cockpit view, indicator, modal, and autonomous diagnostic tool in the platform, consult [**USER_GUIDE.html**](USER_GUIDE.html) .
+> 📖 **Comprehensive Visual User Guide Available**: For an illustrated end-to-end operational handbook with 26 authentic screenshots covering every cockpit view, indicator, modal, and autonomous diagnostic tool in the platform, consult [**USER_GUIDE**](https://htmlpreview.github.io/?https://github.com/nitinjugal17/ATP/blob/main/USER_GUIDE.html) .
 
 ---
 
